@@ -1,0 +1,12 @@
+modprobe skb_drop_counter                          # 로드 (1초 간격, 누적 모드)
+
+cat /sys/kernel/debug/skb_drop_counter             # drop 통계 보기
+
+for i in $(seq 1 1000); do cat /sys/kernel/debug/skb_drop_counter; echo "----------"; sleep 1; done
+
+echo simple > /sys/kernel/debug/skb_drop_counter   # simple 모드 (기본, reason별 누적)
+echo detail > /sys/kernel/debug/skb_drop_counter   # detail 모드 (location+reason별)
+echo clear  > /sys/kernel/debug/skb_drop_counter   # 모든 카운터 초기화
+
+rmmod skb_drop_counter                             # 언로드 (카운터 리셋)
+

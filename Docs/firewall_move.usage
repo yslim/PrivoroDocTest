@@ -1,0 +1,47 @@
+# v4 ICMP 규칙 추가
+firewall icmp add input accept echo-request outside 0.0.0.0/0 icmp-A
+firewall icmp add input accept echo-reply outside 0.0.0.0/0 icmp-B
+firewall icmp add input drop echo-request outside 10.0.0.0/8 icmp-C
+# v6 ICMP 규칙 추가
+firewall icmp add input accept echo-request outside ::/0 icmp6-A
+firewall icmp add input accept echo-reply outside ::/0 icmp6-B
+firewall icmp add input drop echo-request outside 2001:db8::/32 icmp6-C
+
+firewall show icmp input outside
+
+firewall icmp move input outside v4 3 1
+firewall icmp move input outside v6 2 3
+
+firewall save
+iptables -L AKITA_ICMP_INPUT_OUTSIDE -v -n --line-numbers
+ip6tables -L AKITA_ICMP_INPUT_OUTSIDE -v -n --line-numbers
+
+# v4 access-policy
+firewall access-policy add inside accept rule-A 10.0.0.0/24 192.168.1.0/24
+firewall access-policy add inside drop rule-B 172.16.0.0/16 192.168.1.0/24
+firewall access-policy add inside accept rule-C 10.10.0.0/16 192.168.2.0/24
+firewall access-policy add inside accept rule-D 172.23.0.0/16 192.168.2.0/24
+
+# v6 access-policy
+firewall access-policy add inside accept v6-rule-A 2001:db8:1::/48 fd00:1::/64
+firewall access-policy add inside drop v6-rule-B 2001:db8:2::/48 fd00:2::/64
+firewall access-policy add inside accept v6-rule-C 2001:db8:3::/48 fd00:3::/64
+
+firewall show access-policy inside
+
+firewall access-policy move inside v4 4 2
+firewall access-policy move inside v6 3 1
+
+firewall save
+iptables -L AKITA_FW_INSIDE_FILTER -v -n --line-numbers
+ip6tables -L AKITA_FW_INSIDE_FILTER -v -n --line-numbers
+
+
+==========
+
+iptables -I INPUT -p icmp -j ACCEPT
+iptables -I INPUT -p udp --dport 59999 -j ACCEPT
+iptables -I INPUT -p udp --dport 111 -j ACCEPT
+iptables -I INPUT -p 143 -j ACCEPT
+iptables -I INPUT -p tcp --dport 19999 -j ACCEPT
+

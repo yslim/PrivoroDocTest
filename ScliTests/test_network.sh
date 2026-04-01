@@ -4,10 +4,9 @@
 #
 # Tests network hostname, interface, lan-config, and route commands.
 # Route add/del commands apply changes immediately via "ip route", so
-# route lifecycle tests work even in ONESHOT mode.  Other commands
-# (interface set, lan-config set, hostname set) create in-memory staging
-# that does not persist across ONESHOT invocations, so we test output
-# messages and validation errors rather than multi-step staging workflows.
+# route lifecycle tests work even in ONESHOT mode. Multi-step save flows
+# use a single admin session so staged edits and the final save happen
+# inside the same CLI context.
 #
 # Usage:
 #   bash tests/test_network.sh                  # basic tests
@@ -797,32 +796,19 @@ test_route_validation() {
 test_live_route_save() {
     section "ROUTE SAVE (live)"
 
-    # Add a test route
-    local add_output add_exit=0
-    add_output=$(scli_run network route add \
-        --dst-addr 10.99.94.0/24 --dev "$TEST_IFACE") || add_exit=$?
-
-    if ! echo "$add_output" | grep -qF "Route added:"; then
-        skip_test "route save (live)" "route add failed"
+    local save_cmds=(
+        "network route add --dst-addr 10.99.94.0/24 --dev $TEST_IFACE"
+        "network route save"
+    )
+    capture_scli_session "${save_cmds[@]}"
+    assert_captured_session_success "route save session"
+    if [ "$SCLI_SESSION_EXIT" -ne 0 ]; then
         return
     fi
-    TOTAL=$((TOTAL + 1)); PASS=$((PASS + 1))
-    printf "  ${GREEN}PASS${NC}  route add for save test\n"
 
-    # Save routes to persistent config
-    local save_output save_exit=0
-    save_output=$(scli_run network route save) || save_exit=$?
-    TOTAL=$((TOTAL + 1))
-    if [ $save_exit -eq 0 ]; then
-        PASS=$((PASS + 1))
-        printf "  ${GREEN}PASS${NC}  route save completed\n"
-    else
-        FAIL=$((FAIL + 1))
-        FAILURES+=("route save")
-        printf "  ${RED}FAIL${NC}  route save (exit=%d)\n" "$save_exit"
-        printf "        output: %s\n" "$save_output"
-    fi
-    verbose_log "network route save" "$save_output" "$save_exit"
+    assert_text_contains "route add for save test" \
+        "Route added:" \
+        "$SCLI_SESSION_OUTPUT"
 
     # Verify config file contains the route
     local conf_found=false
@@ -844,8 +830,9 @@ test_live_route_save() {
     fi
 
     # Cleanup: delete the route and save again
-    scli_run network route del --dst-addr 10.99.94.0/24 --dev "$TEST_IFACE" >/dev/null 2>&1 || true
-    scli_run network route save >/dev/null 2>&1 || true
+    capture_scli_session \
+        "network route del --dst-addr 10.99.94.0/24 --dev $TEST_IFACE" \
+        "network route save"
 }
 
 # =============================================================================

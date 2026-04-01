@@ -193,12 +193,14 @@ test_ntp_commands() {
         system ntp show keys
 
     # Set server (staging)
+    # NTS is now reflected in the staged message, e.g.
+    # "Staged server add (NTS): <server>".
     assert_success "ntp set server (IPv4)" \
-        "Staged server add:" \
+        "Staged server add" \
         system ntp set server 10.99.88.77
 
     assert_success "ntp set server (FQDN)" \
-        "Staged server add:" \
+        "Staged server add" \
         system ntp set server time.test.example.com
 
     assert_success "ntp set server (preferred)" \
@@ -212,9 +214,9 @@ test_ntp_commands() {
     if echo "$dup_output" | grep -qi "already exists"; then
         PASS=$((PASS + 1))
         printf "  ${GREEN}PASS${NC}  ntp set server duplicate (correctly rejected)\n"
-    elif echo "$dup_output" | grep -qF "Staged server add:"; then
+    elif echo "$dup_output" | grep -qF "Staged server add"; then
         PASS=$((PASS + 1))
-        printf "  ${GREEN}PASS${NC}  ntp set server duplicate (re-added in ONESHOT — staging lost)\n"
+        printf "  ${GREEN}PASS${NC}  ntp set server duplicate (re-added in ONESHOT/default NTS output)\n"
     else
         FAIL=$((FAIL + 1))
         FAILURES+=("ntp set server duplicate")

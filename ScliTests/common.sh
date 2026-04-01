@@ -8,9 +8,10 @@
 # Provides:
 #   - Color definitions
 #   - Pass/fail/skip counters
-#   - scli_run, verbose_log
+#   - scli_run, scli_run_session, verbose_log
 #   - assert_success, assert_error, assert_output_contains,
-#     assert_output_not_contains, assert_dir_not_exists
+#     assert_output_not_contains, assert_text_contains,
+#     assert_dir_not_exists
 #   - assert_file_contains, assert_cmd, assert_cmd_fail
 #   - skip_test, section
 #   - print_summary (call at the end of main)
@@ -21,6 +22,7 @@
 # Configuration (can be overridden before sourcing)
 # ---------------------------------------------------------------------------
 SCLI_BIN="${SCLI_BIN:-scli}"
+SCLI_SESSION_USER="${SCLI_SESSION_USER:-admin}"
 VERBOSE=false
 LIVE=false
 export SCLI_ONESHOT=1
@@ -33,6 +35,8 @@ FAIL=0
 SKIP=0
 TOTAL=0
 FAILURES=()
+SCLI_SESSION_OUTPUT=""
+SCLI_SESSION_EXIT=0
 
 # ---------------------------------------------------------------------------
 # Colors
@@ -51,6 +55,42 @@ NC='\033[0m'
 # Run scli and capture combined stdout+stderr; return the exit code.
 scli_run() {
     "$SCLI_BIN" "$@" 2>&1
+}
+
+# Run multiple CLI commands inside a single admin session.
+# Use this for workflows that stage changes and then save/show them.
+scli_run_session() {
+    local session_user="${SCLI_SESSION_USER:-admin}"
+
+    if [ "$(id -u)" -eq 0 ]; then
+        {
+            printf '%s\n' "$@"
+            printf 'exit\n'
+        } | su - "$session_user" 2>&1
+    else
+        {
+            printf '%s\n' "$@"
+            printf 'exit\n'
+        } | sudo -n su - "$session_user" 2>&1
+    fi
+}
+
+format_session_commands() {
+    local joined="" cmd
+    for cmd in "$@"; do
+        if [ -n "$joined" ]; then
+            joined="${joined} ; "
+        fi
+        joined="${joined}${cmd}"
+    done
+    printf '%s' "$joined"
+}
+
+capture_scli_session() {
+    SCLI_SESSION_OUTPUT=""
+    SCLI_SESSION_EXIT=0
+    SCLI_SESSION_OUTPUT=$(scli_run_session "$@") || SCLI_SESSION_EXIT=$?
+    verbose_log "[session] $(format_session_commands "$@")" "$SCLI_SESSION_OUTPUT" "$SCLI_SESSION_EXIT"
 }
 
 # verbose_log <cmd_args_string> <output> <exit_code>
@@ -176,6 +216,39 @@ assert_output_not_contains() {
         printf "        expected NOT to find: %s\n" "$needle"
     fi
     verbose_log "$*" "$output" "$exit_code"
+}
+
+# assert_text_contains <description> <needle> <haystack>
+#   PASS if the provided text contains the needle string.
+assert_text_contains() {
+    local desc="$1" needle="$2" haystack="$3"
+    TOTAL=$((TOTAL + 1))
+
+    if printf '%s\n' "$haystack" | grep -qF -- "$needle"; then
+        PASS=$((PASS + 1))
+        printf "  ${GREEN}PASS${NC}  %s\n" "$desc"
+    else
+        FAIL=$((FAIL + 1))
+        FAILURES+=("$desc")
+        printf "  ${RED}FAIL${NC}  %s\n" "$desc"
+        printf "        expected to find: %s\n" "$needle"
+        printf "        in output:\n%s\n" "$haystack"
+    fi
+}
+
+assert_captured_session_success() {
+    local desc="$1"
+    TOTAL=$((TOTAL + 1))
+
+    if [ "$SCLI_SESSION_EXIT" -eq 0 ]; then
+        PASS=$((PASS + 1))
+        printf "  ${GREEN}PASS${NC}  %s\n" "$desc"
+    else
+        FAIL=$((FAIL + 1))
+        FAILURES+=("$desc")
+        printf "  ${RED}FAIL${NC}  %s\n" "$desc"
+        printf "        session exit=%d output: %s\n" "$SCLI_SESSION_EXIT" "$SCLI_SESSION_OUTPUT"
+    fi
 }
 
 # assert_dir_not_exists <description> <path>

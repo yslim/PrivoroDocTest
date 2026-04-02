@@ -59,7 +59,7 @@ test_est_server_show() {
 test_est_server_set() {
     section "EST SERVER SET COMMANDS"
 
-    # Address
+    # --- Individual set commands (validation / staging output) ---
     assert_success "est-server set address (IPv4)" \
         "Staged Address:" \
         security est-server set address 10.99.88.1
@@ -72,7 +72,6 @@ test_est_server_set() {
         "Staged Address:" \
         security est-server set address fd99::1
 
-    # Port
     assert_success "est-server set port 443" \
         "Staged Port" \
         security est-server set port 443
@@ -89,7 +88,6 @@ test_est_server_set() {
         "invalid port" \
         security est-server set port abc
 
-    # Base-path
     assert_success "est-server set base-path" \
         "Staged EST base path" \
         security est-server set base-path /.well-known/est
@@ -98,7 +96,6 @@ test_est_server_set() {
         "Staged EST base path" \
         security est-server set base-path /
 
-    # Auto-reenroll
     assert_success "est-server set auto-reenroll no" \
         "Staged EST Auto ReEnroll:" \
         security est-server set auto-reenroll no
@@ -121,10 +118,38 @@ test_est_server_set() {
     fi
     verbose_log "security est-server set auto-reenroll yes" "$auto_output" "$auto_exit"
 
-    # Save (no changes in ONESHOT)
-    assert_output_contains "est-server save (no changes)" \
+    # Save (no changes in ONESHOT — staging lost between calls)
+    assert_output_contains "est-server save (no changes in ONESHOT)" \
         "No changes to save" \
         security est-server save
+}
+
+# ---------------------------------------------------------------------------
+# 2b. EST Server set+save session (staging persists within session)
+# ---------------------------------------------------------------------------
+test_est_server_set_save_session() {
+    section "EST SERVER SET+SAVE SESSION"
+
+    local cmds=(
+        "security est-server set address 10.99.88.1"
+        "security est-server set port 443"
+        "security est-server set base-path /.well-known/est"
+        "security est-server save"
+    )
+    capture_scli_session "${cmds[@]}"
+    assert_captured_session_success "est-server set+save session"
+
+    assert_text_contains "est session: address staged" \
+        "Staged Address:" \
+        "$SCLI_SESSION_OUTPUT"
+
+    assert_text_contains "est session: port staged" \
+        "Staged Port" \
+        "$SCLI_SESSION_OUTPUT"
+
+    assert_text_contains "est session: base-path staged" \
+        "Staged EST base path" \
+        "$SCLI_SESSION_OUTPUT"
 }
 
 # ---------------------------------------------------------------------------
@@ -405,7 +430,7 @@ test_vpn_set_commands() {
 }
 
 # ---------------------------------------------------------------------------
-# 5. VPN del commands
+# 5. VPN del commands (individual staging output)
 # ---------------------------------------------------------------------------
 test_vpn_del_commands() {
     section "VPN DEL COMMANDS"
@@ -437,6 +462,66 @@ test_vpn_del_commands() {
     assert_success "vpn del vti source-ip" \
         "Staged:" \
         security vpn del vti source-ip
+}
+
+# ---------------------------------------------------------------------------
+# 5b. VPN set+del session (staging persists for del to find set values)
+# ---------------------------------------------------------------------------
+test_vpn_set_del_session() {
+    section "VPN SET+DEL SESSION"
+
+    if ! check_vpn_engine; then
+        skip_test "vpn set+del session" "no VPN engine configured"
+        return
+    fi
+
+    local cmds=(
+        "security vpn set psk local-id test-local-id"
+        "security vpn set psk remote-id test-remote-id"
+        "security vpn set psk secret test-secret-12345"
+        "security vpn del psk local-id"
+        "security vpn del psk remote-id"
+        "security vpn del psk secret"
+    )
+    capture_scli_session "${cmds[@]}"
+    assert_captured_session_success "vpn psk set+del session"
+
+    assert_text_contains "session: psk local-id staged" \
+        "Staged:" \
+        "$SCLI_SESSION_OUTPUT"
+}
+
+# ---------------------------------------------------------------------------
+# 5c. VPN set+save session (staging persists for save)
+# ---------------------------------------------------------------------------
+test_vpn_set_save_session() {
+    section "VPN SET+SAVE SESSION"
+
+    if ! check_vpn_engine; then
+        skip_test "vpn set+save session" "no VPN engine configured"
+        return
+    fi
+
+    local cmds=(
+        "security vpn set psk local-id test-local-id"
+        "security vpn set psk remote-id test-remote-id"
+        "security vpn set psk secret test-secret-12345"
+        "security vpn set ike peer address 10.99.88.1"
+        "security vpn set ike lifetime 3600"
+        "security vpn set esp lifetime 3600"
+        "security vpn set esp remote-ts 10.10.20.0/24"
+        "security vpn save"
+    )
+    capture_scli_session "${cmds[@]}"
+    assert_captured_session_success "vpn set+save session"
+
+    assert_text_contains "save session: psk local-id" \
+        "Staged:" \
+        "$SCLI_SESSION_OUTPUT"
+
+    assert_text_contains "save session: peer address" \
+        "Staged:" \
+        "$SCLI_SESSION_OUTPUT"
 }
 
 # ---------------------------------------------------------------------------
@@ -623,7 +708,16 @@ main() {
     test_vpn_show
     test_vpn_set_commands
     test_vpn_del_commands
+    test_vpn_set_del_session
     test_vpn_save_guard
+
+    # Live session tests (set+save workflows)
+    if $LIVE; then
+        test_est_server_set_save_session
+        test_vpn_set_save_session
+    else
+        section "SESSION SAVE TESTS (skipped, use --live)"
+    fi
 
     # Certificates
     test_certificates_show

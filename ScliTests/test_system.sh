@@ -548,7 +548,204 @@ test_update_commands() {
 }
 
 # ---------------------------------------------------------------------------
-# 9. Live service tests (--live only)
+# 9. Audit commands
+# ---------------------------------------------------------------------------
+test_audit_commands() {
+    section "AUDIT COMMANDS"
+
+    # Show status
+    local audit_st_output audit_st_exit=0
+    audit_st_output=$(scli_run system audit show status) || audit_st_exit=$?
+    TOTAL=$((TOTAL + 1))
+    if [ -n "$audit_st_output" ]; then
+        PASS=$((PASS + 1))
+        printf "  ${GREEN}PASS${NC}  audit show status\n"
+    else
+        FAIL=$((FAIL + 1))
+        FAILURES+=("audit show status")
+        printf "  ${RED}FAIL${NC}  audit show status (no output, exit=%d)\n" "$audit_st_exit"
+    fi
+    verbose_log "system audit show status" "$audit_st_output" "$audit_st_exit"
+
+    # Show config
+    assert_output_contains "audit show config (Categories)" \
+        "Categories" \
+        system audit show config
+
+    # Show events (default count)
+    local events_output events_exit=0
+    events_output=$(scli_run system audit show events) || events_exit=$?
+    TOTAL=$((TOTAL + 1))
+    if [ $events_exit -eq 0 ]; then
+        PASS=$((PASS + 1))
+        printf "  ${GREEN}PASS${NC}  audit show events\n"
+    elif echo "$events_output" | grep -qi "no such file\|not found\|empty"; then
+        PASS=$((PASS + 1))
+        printf "  ${GREEN}PASS${NC}  audit show events (no audit log yet)\n"
+    else
+        FAIL=$((FAIL + 1))
+        FAILURES+=("audit show events")
+        printf "  ${RED}FAIL${NC}  audit show events (exit=%d)\n" "$events_exit"
+        printf "        output: %s\n" "$events_output"
+    fi
+    verbose_log "system audit show events" "$events_output" "$events_exit"
+
+    # Show events with count
+    local events5_output events5_exit=0
+    events5_output=$(scli_run system audit show events 5) || events5_exit=$?
+    TOTAL=$((TOTAL + 1))
+    if [ $events5_exit -eq 0 ]; then
+        PASS=$((PASS + 1))
+        printf "  ${GREEN}PASS${NC}  audit show events 5\n"
+    elif echo "$events5_output" | grep -qi "no such file\|not found\|empty"; then
+        PASS=$((PASS + 1))
+        printf "  ${GREEN}PASS${NC}  audit show events 5 (no audit log yet)\n"
+    else
+        FAIL=$((FAIL + 1))
+        FAILURES+=("audit show events 5")
+        printf "  ${RED}FAIL${NC}  audit show events 5 (exit=%d)\n" "$events5_exit"
+        printf "        output: %s\n" "$events5_output"
+    fi
+    verbose_log "system audit show events 5" "$events5_output" "$events5_exit"
+
+    # Set category enable/disable
+    assert_success "audit set category system enable" \
+        "enabled" \
+        system audit set category system enable
+
+    assert_success "audit set category system disable" \
+        "disabled" \
+        system audit set category system disable
+
+    assert_success "audit set category auth enable" \
+        "enabled" \
+        system audit set category auth enable
+
+    assert_success "audit set category vpn enable" \
+        "enabled" \
+        system audit set category vpn enable
+
+    assert_success "audit set category firewall enable" \
+        "enabled" \
+        system audit set category firewall enable
+
+    assert_success "audit set category crypto enable" \
+        "enabled" \
+        system audit set category crypto enable
+
+    assert_success "audit set category mgmt enable" \
+        "enabled" \
+        system audit set category mgmt enable
+
+    assert_success "audit set category network enable" \
+        "enabled" \
+        system audit set category network enable
+
+    assert_success "audit set category update enable" \
+        "enabled" \
+        system audit set category update enable
+
+    # Invalid category
+    assert_error "audit set category invalid" \
+        "" \
+        system audit set category nonexistent enable
+
+    # Invalid enable/disable value
+    assert_error "audit set category invalid value" \
+        "" \
+        system audit set category system bogus
+
+    # Test event
+    local test_output test_exit=0
+    test_output=$(scli_run system audit test "scli-test-event") || test_exit=$?
+    TOTAL=$((TOTAL + 1))
+    if [ $test_exit -eq 0 ]; then
+        PASS=$((PASS + 1))
+        printf "  ${GREEN}PASS${NC}  audit test event\n"
+    elif echo "$test_output" | grep -qi "connect\|socket\|not running"; then
+        PASS=$((PASS + 1))
+        printf "  ${GREEN}PASS${NC}  audit test event (service not running)\n"
+    else
+        FAIL=$((FAIL + 1))
+        FAILURES+=("audit test event")
+        printf "  ${RED}FAIL${NC}  audit test event (exit=%d)\n" "$test_exit"
+        printf "        output: %s\n" "$test_output"
+    fi
+    verbose_log "system audit test scli-test-event" "$test_output" "$test_exit"
+}
+
+# ---------------------------------------------------------------------------
+# 10. Live session tests: NTP set+save
+# ---------------------------------------------------------------------------
+test_live_ntp_set_save_session() {
+    section "NTP SET+SAVE SESSION (live)"
+
+    local cmds=(
+        "system ntp set server 10.99.88.77"
+        "system ntp set auth-key 1 SHA256 test-passphrase"
+        "system ntp set server-key 10.99.88.77 1"
+        "system ntp save"
+    )
+    capture_scli_session "${cmds[@]}"
+    assert_captured_session_success "ntp set+save session"
+
+    assert_text_contains "ntp session: server staged" \
+        "Staged server add" \
+        "$SCLI_SESSION_OUTPUT"
+
+    assert_text_contains "ntp session: auth-key staged" \
+        "Staged auth-key:" \
+        "$SCLI_SESSION_OUTPUT"
+}
+
+# ---------------------------------------------------------------------------
+# 11. Live session tests: syslog-server add+save
+# ---------------------------------------------------------------------------
+test_live_syslog_set_save_session() {
+    section "SYSLOG-SERVER ADD+SAVE SESSION (live)"
+
+    local cmds=(
+        "system syslog-server add address TCP 10.99.88.100 514"
+        "system syslog-server save"
+    )
+    capture_scli_session "${cmds[@]}"
+    assert_captured_session_success "syslog-server add+save session"
+
+    assert_text_contains "syslog session: address staged" \
+        "Staged:" \
+        "$SCLI_SESSION_OUTPUT"
+}
+
+# ---------------------------------------------------------------------------
+# 12. Live session tests: update set+save
+# ---------------------------------------------------------------------------
+test_live_update_set_save_session() {
+    section "UPDATE SET+SAVE SESSION (live)"
+
+    local cmds=(
+        "system update set server address swupdate.test.example.com"
+        "system update set server port 8443"
+        "system update set server protocol https"
+        "system update save"
+    )
+    capture_scli_session "${cmds[@]}"
+    assert_captured_session_success "update set+save session"
+
+    assert_text_contains "update session: address staged" \
+        "Staged server address:" \
+        "$SCLI_SESSION_OUTPUT"
+
+    assert_text_contains "update session: port staged" \
+        "Staged server port:" \
+        "$SCLI_SESSION_OUTPUT"
+
+    assert_text_contains "update session: protocol staged" \
+        "Staged server protocol:" \
+        "$SCLI_SESSION_OUTPUT"
+}
+
+# ---------------------------------------------------------------------------
+# 13. Live service tests (--live only)
 # ---------------------------------------------------------------------------
 test_live_ntp_service() {
     section "NTP SERVICE (live)"
@@ -564,6 +761,21 @@ test_live_syslog_service() {
     assert_success "syslog-server set service restart" \
         "restarted successfully" \
         system syslog-server set service restart
+}
+
+# ---------------------------------------------------------------------------
+# 14. Live session tests: audit set+save
+# ---------------------------------------------------------------------------
+test_live_audit_set_save_session() {
+    section "AUDIT SET+SAVE SESSION (live)"
+
+    local cmds=(
+        "system audit set category system enable"
+        "system audit set category auth enable"
+        "system audit save"
+    )
+    capture_scli_session "${cmds[@]}"
+    assert_captured_session_success "audit set+save session"
 }
 
 # =============================================================================
@@ -583,13 +795,18 @@ main() {
     test_syslog_server_commands
     test_log_commands
     test_update_commands
+    test_audit_commands
 
-    # Live service tests
+    # Live session + service tests
     if $LIVE; then
+        test_live_ntp_set_save_session
+        test_live_syslog_set_save_session
+        test_live_update_set_save_session
+        test_live_audit_set_save_session
         test_live_ntp_service
         test_live_syslog_service
     else
-        section "SERVICE RESTART TESTS (skipped, use --live)"
+        section "SESSION SAVE & SERVICE RESTART TESTS (skipped, use --live)"
     fi
 
     print_summary

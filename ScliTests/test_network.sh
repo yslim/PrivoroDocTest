@@ -791,7 +791,73 @@ test_route_validation() {
 }
 
 # ---------------------------------------------------------------------------
-# 15. Live save tests (--live only)
+# 15. Live interface set+save session (--live only)
+# ---------------------------------------------------------------------------
+test_live_interface_set_save() {
+    section "INTERFACE SET+SAVE SESSION (live)"
+
+    local cmds=(
+        "network interface set mode $TEST_IFACE static"
+        "network interface set add-address $TEST_IFACE 10.99.88.1/24"
+        "network interface set gateway $TEST_IFACE 10.99.88.254"
+        "network interface set dns $TEST_IFACE 8.8.8.8"
+        "network interface set mtu $TEST_IFACE 1500"
+        "network interface save"
+    )
+    capture_scli_session "${cmds[@]}"
+    assert_captured_session_success "interface set+save session"
+
+    assert_text_contains "iface session: mode staged" \
+        "Staged mode:" \
+        "$SCLI_SESSION_OUTPUT"
+
+    assert_text_contains "iface session: address staged" \
+        "Staged address add:" \
+        "$SCLI_SESSION_OUTPUT"
+
+    assert_text_contains "iface session: gateway staged" \
+        "Staged gateway:" \
+        "$SCLI_SESSION_OUTPUT"
+
+    assert_text_contains "iface session: dns staged" \
+        "Staged DNS:" \
+        "$SCLI_SESSION_OUTPUT"
+
+    assert_text_contains "iface session: mtu staged" \
+        "Staged MTU:" \
+        "$SCLI_SESSION_OUTPUT"
+}
+
+# ---------------------------------------------------------------------------
+# 16. Live lan-config set+save session (--live only)
+# ---------------------------------------------------------------------------
+test_live_lan_config_set_save() {
+    section "LAN CONFIG SET+SAVE SESSION (live)"
+
+    local cmds=(
+        "network lan-config set address4 10.10.101.1/24"
+        "network lan-config set dns4 8.8.8.8 8.8.4.4"
+        "network lan-config set dhcp-server service enable"
+        "network lan-config save"
+    )
+    capture_scli_session "${cmds[@]}"
+    assert_captured_session_success "lan-config set+save session"
+
+    assert_text_contains "lan session: address4 staged" \
+        "Staged IPv4 address:" \
+        "$SCLI_SESSION_OUTPUT"
+
+    assert_text_contains "lan session: dns4 staged" \
+        "Staged IPv4 DNS:" \
+        "$SCLI_SESSION_OUTPUT"
+
+    assert_text_contains "lan session: dhcp staged" \
+        "Staged DHCP server:" \
+        "$SCLI_SESSION_OUTPUT"
+}
+
+# ---------------------------------------------------------------------------
+# 17. Live route save tests (--live only)
 # ---------------------------------------------------------------------------
 test_live_route_save() {
     section "ROUTE SAVE (live)"
@@ -872,6 +938,8 @@ main() {
 
     # Live save tests (only when --live is passed)
     if $LIVE; then
+        test_live_interface_set_save
+        test_live_lan_config_set_save
         test_live_route_save
     else
         section "SAVE TESTS (skipped, use --live)"

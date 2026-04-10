@@ -2012,6 +2012,100 @@ test_save_and_verify() {
 }
 
 # ---------------------------------------------------------------------------
+# 12c. Save + rollback verification (LIVE mode only)
+# ---------------------------------------------------------------------------
+test_save_rollback() {
+    section "SAVE + ROLLBACK VERIFICATION (live)"
+    cleanup_staging
+
+    # ===== PHASE 1: Stage rules across multiple categories =====
+    local bypass_added=false
+    local stage_cmds=(
+        "firewall icmp4 add input accept echo-request outside 10.98.0.0/16 trol-icmp-v4"
+        "firewall icmp6 add input accept echo-request outside fd98::/64 trol-icmp-v6"
+        "firewall icmp4 add input drop type-code 3/4 outside 10.98.1.0/24 trol-icmp-tc"
+        "firewall icmp4 add input accept echo-request outside 10.98.2.0/24 trol-icmp-log --logging"
+        "firewall access-policy add inside accept trol-ap-in 10.98.3.0/24 10.98.4.0/24 -p tcp --dport 8080"
+        "firewall access-policy add outside accept trol-ap-out 0.0.0.0/0 10.98.5.0/24 -p tcp --dport 443"
+        "firewall vpn-policy add in deny trol-vpn-in-deny 10.98.6.0/24 0.0.0.0/0 -p tcp --dport 22"
+        "firewall vpn-policy add out deny trol-vpn-out-deny 10.98.7.0/24 0.0.0.0/0 -p udp --dport 53"
+        "firewall vpn-policy add in bypass trol-vpn-in-bypass 10.98.8.0/24 0.0.0.0/0 -p tcp --dport 80"
+        "firewall nat masquerade add trol-masq 10.98.9.0/24 0.0.0.0/0"
+        "firewall nat snat add trol-snat 10.98.10.0/24 0.0.0.0/0 --to-source 203.0.113.98:9090 -p tcp --dport 80"
+        "firewall nat dnat add trol-dnat 0.0.0.0/0 203.0.113.97 --to-destination 10.98.11.100:8080 -p tcp --dport 8080"
+        "firewall save"
+        "N"
+    )
+    capture_scli_session "${stage_cmds[@]}"
+    assert_captured_session_success "rollback session: stage + save + N"
+    if [ "$SCLI_SESSION_EXIT" -ne 0 ]; then
+        return
+    fi
+
+    # ===== PHASE 2: Verify rollback message =====
+    assert_text_contains "rollback: rolled back message" \
+        "Rolled back firewall changes" \
+        "$SCLI_SESSION_OUTPUT"
+
+    # Check if bypass was actually staged (XFRM may not be available)
+    if printf '%s\n' "$SCLI_SESSION_OUTPUT" | grep -qF 'Staged new vpn-policy in rule "trol-vpn-in-bypass"'; then
+        bypass_added=true
+    fi
+
+    # ===== PHASE 3: Verify rules are NOT in kernel after rollback =====
+
+    # -- ICMPv4 --
+    assert_iptables_chain_not_contains "rollback: AKITA_ICMP_INPUT_OUTSIDE no trol-icmp-v4" \
+        "AKITA_ICMP_INPUT_OUTSIDE" "trol-icmp-v4"
+
+    assert_iptables_chain_not_contains "rollback: AKITA_ICMP_INPUT_OUTSIDE no trol-icmp-tc" \
+        "AKITA_ICMP_INPUT_OUTSIDE" "trol-icmp-tc"
+
+    assert_iptables_chain_not_contains "rollback: AKITA_ICMP_INPUT_OUTSIDE no trol-icmp-log" \
+        "AKITA_ICMP_INPUT_OUTSIDE" "trol-icmp-log"
+
+    # -- ICMPv6 --
+    assert_ip6tables_chain_not_contains "rollback: AKITA_ICMP_INPUT_OUTSIDE no trol-icmp-v6 (v6)" \
+        "AKITA_ICMP_INPUT_OUTSIDE" "trol-icmp-v6"
+
+    # -- Access policy --
+    assert_iptables_chain_not_contains "rollback: AKITA_FW_INSIDE_FILTER no trol-ap-in" \
+        "AKITA_FW_INSIDE_FILTER" "trol-ap-in"
+
+    assert_iptables_chain_not_contains "rollback: AKITA_FW_OUTSIDE_FILTER no trol-ap-out" \
+        "AKITA_FW_OUTSIDE_FILTER" "trol-ap-out"
+
+    # -- VPN deny --
+    assert_iptables_chain_not_contains "rollback: AKITA_VPN_IN_DENY no trol-vpn-in-deny" \
+        "AKITA_VPN_IN_DENY" "trol-vpn-in-deny"
+
+    assert_iptables_chain_not_contains "rollback: AKITA_VPN_OUT_DENY no trol-vpn-out-deny" \
+        "AKITA_VPN_OUT_DENY" "trol-vpn-out-deny"
+
+    # -- VPN bypass + XFRM --
+    if $bypass_added; then
+        assert_iptables_chain_not_contains "rollback: AKITA_VPN_IN_BYPASS no trol-vpn-in-bypass" \
+            "AKITA_VPN_IN_BYPASS" "trol-vpn-in-bypass"
+
+        assert_xfrm_not_contains "rollback: xfrm no 10.98.8.0/24" \
+            "10.98.8.0/24"
+    fi
+
+    # -- NAT --
+    assert_iptables_nat_chain_not_contains "rollback: AKITA_MASQUERADE no trol-masq" \
+        "AKITA_MASQUERADE" "trol-masq"
+
+    assert_iptables_nat_chain_not_contains "rollback: AKITA_SNAT no trol-snat" \
+        "AKITA_SNAT" "trol-snat"
+
+    assert_iptables_nat_chain_not_contains "rollback: AKITA_DNAT no trol-dnat" \
+        "AKITA_DNAT" "trol-dnat"
+
+    # ===== PHASE 4: Cleanup =====
+    cleanup_staging
+}
+
+# ---------------------------------------------------------------------------
 # 13. IPSET commands
 # ---------------------------------------------------------------------------
 test_ipset_commands() {
@@ -2129,8 +2223,10 @@ main() {
     # Live save tests (only when --live is passed)
     if $LIVE; then
         test_save_and_verify
+        test_save_rollback
     else
         section "SAVE + KERNEL VERIFICATION (skipped, use --live)"
+        section "SAVE + ROLLBACK VERIFICATION (skipped, use --live)"
     fi
 
     test_ipset_commands

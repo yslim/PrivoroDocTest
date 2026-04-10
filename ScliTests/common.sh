@@ -25,6 +25,7 @@ SCLI_BIN="${SCLI_BIN:-scli}"
 SCLI_SESSION_USER="${SCLI_SESSION_USER:-admin}"
 VERBOSE=false
 LIVE=false
+ONLY=""
 export SCLI_ONESHOT=1
 
 # ---------------------------------------------------------------------------
@@ -345,9 +346,21 @@ parse_common_args() {
         case "$1" in
             -v|--verbose) VERBOSE=true; shift ;;
             --live) LIVE=true; shift ;;
+            --only) ONLY="$2"; shift 2 ;;
             *) shift ;;
         esac
     done
+}
+
+# run_test <function_name>
+#   Runs the test function. Skips if --only is set and function name doesn't match.
+#   Usage in main():  run_test test_icmp4_lifecycle
+run_test() {
+    local func_name="$1"
+    if [ -n "$ONLY" ] && [[ "$func_name" != *"$ONLY"* ]]; then
+        return
+    fi
+    "$func_name"
 }
 
 # ---------------------------------------------------------------------------
@@ -364,6 +377,9 @@ print_header() {
     fi
     if $LIVE; then
         printf "${BOLD} Mode:   ${RED}LIVE (save tests enabled)${NC}\n"
+    fi
+    if [ -n "$ONLY" ]; then
+        printf "${BOLD} Filter: ${YELLOW}--only %s${NC}\n" "$ONLY"
     fi
     printf "${BOLD}============================================${NC}\n"
 

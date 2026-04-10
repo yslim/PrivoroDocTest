@@ -1651,7 +1651,7 @@ test_validation_errors() {
 
     # --- Invalid protocol ---
     assert_error "invalid protocol" \
-        "invalid" \
+        "unknown protocol" \
         firewall access-policy add inside accept test-val-err 10.0.0.0/8 10.0.0.0/8 \
         -p bogus-proto
 
@@ -1747,105 +1747,101 @@ test_save_and_verify() {
     section "SAVE + KERNEL VERIFICATION (live)"
     cleanup_staging
 
-    # ===== PHASE 1: Stage rules across all categories =====
+    # ===== PHASE 1: Stage rules across all categories (ONESHOT mode) =====
+    # Each command runs as a separate ONESHOT process. Staging data persists
+    # on disk between invocations, so save sees all staged rules.
     local bypass_added=false
-    local stage_cmds=(
-        "firewall icmp4 add input accept echo-request outside 10.99.0.0/16 tsav-icmp-v4"
-        "firewall icmp6 add input accept echo-request outside fd99::/64 tsav-icmp-v6"
-        "firewall icmp4 add input accept type-code 3/4 outside 10.99.10.0/24 tsav-icmp-tc"
-        "firewall icmp4 add input drop echo-request outside 10.99.11.0/24 tsav-icmp-log --logging"
-        "firewall access-policy add inside accept tsav-ap-in 10.99.1.0/24 10.99.2.0/24 -p tcp --dport 8080"
-        "firewall access-policy add outside accept tsav-ap-out 0.0.0.0/0 10.99.3.0/24 -p tcp --dport 443"
-        "firewall vpn-policy add in deny tsav-vpn-in-deny 10.99.4.0/24 0.0.0.0/0 -p tcp --dport 22"
-        "firewall vpn-policy add out deny tsav-vpn-out-deny 10.99.5.0/24 0.0.0.0/0 -p udp --dport 53"
-        "firewall vpn-policy add in bypass tsav-vpn-in-bypass 10.99.6.0/24 0.0.0.0/0 -p tcp --dport 80"
-        "firewall nat masquerade add tsav-masq 10.99.7.0/24 0.0.0.0/0"
-        "firewall nat snat add tsav-snat 10.99.8.0/24 0.0.0.0/0 --to-source 203.0.113.99:9090 -p tcp --dport 80"
-        "firewall nat dnat add tsav-dnat 0.0.0.0/0 203.0.113.98 --to-destination 10.99.9.100:8080 -p tcp --dport 8080"
-        "firewall save"
-        "Y"
-    )
-    capture_scli_session "${stage_cmds[@]}"
-    assert_captured_session_success "save session: apply staged rules"
-    if [ "$SCLI_SESSION_EXIT" -ne 0 ]; then
-        return
-    fi
 
     # -- ICMPv4 (outside) --
-    assert_text_contains "save: stage icmp4 echo-request outside" \
+    assert_success "save: stage icmp4 echo-request outside" \
         'Staged new ICMPv4 rule "tsav-icmp-v4"' \
-        "$SCLI_SESSION_OUTPUT"
+        firewall icmp4 add input accept echo-request outside 10.99.0.0/16 tsav-icmp-v4
 
     # -- ICMPv6 (outside) --
-    assert_text_contains "save: stage icmp6 echo-request outside" \
+    assert_success "save: stage icmp6 echo-request outside" \
         'Staged new ICMPv6 rule "tsav-icmp-v6"' \
-        "$SCLI_SESSION_OUTPUT"
+        firewall icmp6 add input accept echo-request outside fd99::/64 tsav-icmp-v6
 
     # -- ICMPv4 type-code --
-    assert_text_contains "save: stage icmp4 type-code 3/4" \
+    assert_success "save: stage icmp4 type-code 3/4" \
         'Staged new ICMPv4 rule "tsav-icmp-tc"' \
-        "$SCLI_SESSION_OUTPUT"
+        firewall icmp4 add input accept type-code 3/4 outside 10.99.10.0/24 tsav-icmp-tc
 
     # -- ICMPv4 --logging --
-    assert_text_contains "save: stage icmp4 echo-request drop --logging" \
+    assert_success "save: stage icmp4 echo-request drop --logging" \
         'Staged new ICMPv4 rule "tsav-icmp-log"' \
-        "$SCLI_SESSION_OUTPUT"
+        firewall icmp4 add input drop echo-request outside 10.99.11.0/24 tsav-icmp-log --logging
 
     # -- Access-policy inside (IPv4) --
-    assert_text_contains "save: stage access-policy inside" \
+    assert_success "save: stage access-policy inside" \
         'Staged new inside access-policy rule "tsav-ap-in"' \
-        "$SCLI_SESSION_OUTPUT"
+        firewall access-policy add inside accept tsav-ap-in 10.99.1.0/24 10.99.2.0/24 -p tcp --dport 8080
 
     # -- Access-policy outside (IPv4) --
-    assert_text_contains "save: stage access-policy outside" \
+    assert_success "save: stage access-policy outside" \
         'Staged new outside access-policy rule "tsav-ap-out"' \
-        "$SCLI_SESSION_OUTPUT"
+        firewall access-policy add outside accept tsav-ap-out 0.0.0.0/0 10.99.3.0/24 -p tcp --dport 443
 
     # -- VPN in deny (IPv4) --
-    assert_text_contains "save: stage vpn-policy in deny" \
+    assert_success "save: stage vpn-policy in deny" \
         'Staged new vpn-policy in rule "tsav-vpn-in-deny" (action=deny)' \
-        "$SCLI_SESSION_OUTPUT"
+        firewall vpn-policy add in deny tsav-vpn-in-deny 10.99.4.0/24 0.0.0.0/0 -p tcp --dport 22
 
     # -- VPN out deny (IPv4) --
-    assert_text_contains "save: stage vpn-policy out deny" \
+    assert_success "save: stage vpn-policy out deny" \
         'Staged new vpn-policy out rule "tsav-vpn-out-deny" (action=deny)' \
-        "$SCLI_SESSION_OUTPUT"
+        firewall vpn-policy add out deny tsav-vpn-out-deny 10.99.5.0/24 0.0.0.0/0 -p udp --dport 53
 
     # -- VPN in bypass (may require XFRM scripts — skip gracefully) --
-    if printf '%s\n' "$SCLI_SESSION_OUTPUT" | grep -qF 'Staged new vpn-policy in rule "tsav-vpn-in-bypass"'; then
+    local bypass_output bypass_exit=0
+    bypass_output=$(scli_run firewall vpn-policy add in bypass tsav-vpn-in-bypass 10.99.6.0/24 0.0.0.0/0 -p tcp --dport 80) || bypass_exit=$?
+    if printf '%s\n' "$bypass_output" | grep -qF 'Staged new vpn-policy in rule "tsav-vpn-in-bypass"'; then
         TOTAL=$((TOTAL + 1)); PASS=$((PASS + 1))
         printf "  ${GREEN}PASS${NC}  save: stage vpn-policy in bypass\n"
         bypass_added=true
-    elif printf '%s\n' "$SCLI_SESSION_OUTPUT" | grep -qi "no such file\|not found\|xfrm"; then
+    elif printf '%s\n' "$bypass_output" | grep -qi "no such file\|not found\|xfrm"; then
         skip_test "save: stage vpn-policy in bypass" "XFRM scripts not available"
     else
         TOTAL=$((TOTAL + 1)); FAIL=$((FAIL + 1)); FAILURES+=("save: stage vpn-policy in bypass")
         printf "  ${RED}FAIL${NC}  save: stage vpn-policy in bypass\n"
-        printf "        output: %s\n" "$SCLI_SESSION_OUTPUT"
+        printf "        output: %s\n" "$bypass_output"
     fi
+    verbose_log "firewall vpn-policy add in bypass tsav-vpn-in-bypass ..." "$bypass_output" "$bypass_exit"
 
     # -- NAT masquerade --
-    assert_text_contains "save: stage nat masquerade" \
+    assert_success "save: stage nat masquerade" \
         'Staged new NAT masquerade rule "tsav-masq"' \
-        "$SCLI_SESSION_OUTPUT"
+        firewall nat masquerade add tsav-masq 10.99.7.0/24 0.0.0.0/0
 
     # -- NAT SNAT --
-    assert_text_contains "save: stage nat snat" \
+    assert_success "save: stage nat snat" \
         'Staged new NAT SNAT rule "tsav-snat"' \
-        "$SCLI_SESSION_OUTPUT"
+        firewall nat snat add tsav-snat 10.99.8.0/24 0.0.0.0/0 --to-source 203.0.113.99:9090 -p tcp --dport 80
 
     # -- NAT DNAT --
-    assert_text_contains "save: stage nat dnat" \
+    assert_success "save: stage nat dnat" \
         'Staged new NAT DNAT rule "tsav-dnat"' \
-        "$SCLI_SESSION_OUTPUT"
+        firewall nat dnat add tsav-dnat 0.0.0.0/0 203.0.113.98 --to-destination 10.99.9.100:8080 -p tcp --dport 8080
 
-    # ===== PHASE 2: Save and confirm =====
-    assert_text_contains "save: apply all staged rules" \
-        "confirmed and saved" \
-        "$SCLI_SESSION_OUTPUT"
+    # ===== PHASE 2: Save and confirm (ONESHOT — pipe Y directly) =====
+    # In ONESHOT mode there is no readline, so bufio.NewScanner(os.Stdin)
+    # reads the piped "Y" directly without conflict.
+    TOTAL=$((TOTAL + 1))
+    local save_output save_exit=0
+    save_output=$(echo "Y" | "$SCLI_BIN" firewall save 2>&1) || save_exit=$?
+    if printf '%s\n' "$save_output" | grep -qF "confirmed and saved"; then
+        PASS=$((PASS + 1))
+        printf "  ${GREEN}PASS${NC}  save: apply all staged rules\n"
+    else
+        FAIL=$((FAIL + 1))
+        FAILURES+=("save: apply all staged rules")
+        printf "  ${RED}FAIL${NC}  save: apply all staged rules\n"
+        printf "        expected: confirmed and saved\n"
+        printf "        got (exit=%d): %s\n" "$save_exit" "$save_output"
+    fi
+    verbose_log "echo Y | scli firewall save" "$save_output" "$save_exit"
 
     # ===== PHASE 3: Verify rules exist in kernel =====
-    # Using 'iptables -L <chain> -n' to confirm rules landed in the correct chain.
 
     # -- IPv4 filter: ICMPv4 --
     assert_iptables_chain_contains "kernel v4: AKITA_ICMP_INPUT_OUTSIDE has tsav-icmp-v4" \
@@ -1896,74 +1892,73 @@ test_save_and_verify() {
     assert_iptables_nat_chain_contains "kernel nat: AKITA_DNAT has tsav-dnat" \
         "AKITA_DNAT" "tsav-dnat"
 
-    # ===== PHASE 4: Delete all rules (staging) =====
+    # ===== PHASE 4: Delete all rules (ONESHOT staging) =====
 
-    local delete_cmds=(
-        "firewall icmp4 del input tsav-icmp-v4"
-        "firewall icmp6 del input tsav-icmp-v6"
-        "firewall icmp4 del input tsav-icmp-tc"
-        "firewall icmp4 del input tsav-icmp-log"
-        "firewall access-policy del inside tsav-ap-in"
-        "firewall access-policy del outside tsav-ap-out"
-        "firewall vpn-policy del in deny tsav-vpn-in-deny"
-        "firewall vpn-policy del out deny tsav-vpn-out-deny"
-        "firewall nat masquerade del tsav-masq"
-        "firewall nat snat del tsav-snat"
-        "firewall nat dnat del tsav-dnat"
-    )
-    if $bypass_added; then
-        delete_cmds+=("firewall vpn-policy del in bypass tsav-vpn-in-bypass")
-    fi
-    delete_cmds+=("firewall save" "Y")
-    capture_scli_session "${delete_cmds[@]}"
-    assert_captured_session_success "save session: apply deletions"
-    if [ "$SCLI_SESSION_EXIT" -ne 0 ]; then
-        return
-    fi
-
-    assert_text_contains "save: del icmp4 tsav-icmp-v4" \
+    assert_success "save: del icmp4 tsav-icmp-v4" \
         'Staged deletion of input ICMPv4 rule "tsav-icmp-v4"' \
-        "$SCLI_SESSION_OUTPUT"
-    assert_text_contains "save: del icmp6 tsav-icmp-v6" \
+        firewall icmp4 del input tsav-icmp-v4
+
+    assert_success "save: del icmp6 tsav-icmp-v6" \
         'Staged deletion of input ICMPv6 rule "tsav-icmp-v6"' \
-        "$SCLI_SESSION_OUTPUT"
-    assert_text_contains "save: del icmp4 tsav-icmp-tc" \
+        firewall icmp6 del input tsav-icmp-v6
+
+    assert_success "save: del icmp4 tsav-icmp-tc" \
         'Staged deletion of input ICMPv4 rule "tsav-icmp-tc"' \
-        "$SCLI_SESSION_OUTPUT"
-    assert_text_contains "save: del icmp4 tsav-icmp-log" \
+        firewall icmp4 del input tsav-icmp-tc
+
+    assert_success "save: del icmp4 tsav-icmp-log" \
         'Staged deletion of input ICMPv4 rule "tsav-icmp-log"' \
-        "$SCLI_SESSION_OUTPUT"
-    assert_text_contains "save: del access-policy inside tsav-ap-in" \
+        firewall icmp4 del input tsav-icmp-log
+
+    assert_success "save: del access-policy inside tsav-ap-in" \
         'Staged deletion of inside access-policy rule "tsav-ap-in"' \
-        "$SCLI_SESSION_OUTPUT"
-    assert_text_contains "save: del access-policy outside tsav-ap-out" \
+        firewall access-policy del inside tsav-ap-in
+
+    assert_success "save: del access-policy outside tsav-ap-out" \
         'Staged deletion of outside access-policy rule "tsav-ap-out"' \
-        "$SCLI_SESSION_OUTPUT"
-    assert_text_contains "save: del vpn-policy in deny tsav-vpn-in-deny" \
+        firewall access-policy del outside tsav-ap-out
+
+    assert_success "save: del vpn-policy in deny tsav-vpn-in-deny" \
         'Staged deletion of vpn-policy in rule "tsav-vpn-in-deny"' \
-        "$SCLI_SESSION_OUTPUT"
-    assert_text_contains "save: del vpn-policy out deny tsav-vpn-out-deny" \
+        firewall vpn-policy del in deny tsav-vpn-in-deny
+
+    assert_success "save: del vpn-policy out deny tsav-vpn-out-deny" \
         'Staged deletion of vpn-policy out rule "tsav-vpn-out-deny"' \
-        "$SCLI_SESSION_OUTPUT"
+        firewall vpn-policy del out deny tsav-vpn-out-deny
+
     if $bypass_added; then
-        assert_text_contains "save: del vpn-policy in bypass tsav-vpn-in-bypass" \
+        assert_success "save: del vpn-policy in bypass tsav-vpn-in-bypass" \
             'Staged deletion of vpn-policy in rule "tsav-vpn-in-bypass"' \
-            "$SCLI_SESSION_OUTPUT"
+            firewall vpn-policy del in bypass tsav-vpn-in-bypass
     fi
-    assert_text_contains "save: del nat masquerade tsav-masq" \
+
+    assert_success "save: del nat masquerade tsav-masq" \
         'Staged deletion of NAT masquerade rule "tsav-masq"' \
-        "$SCLI_SESSION_OUTPUT"
-    assert_text_contains "save: del nat snat tsav-snat" \
+        firewall nat masquerade del tsav-masq
+
+    assert_success "save: del nat snat tsav-snat" \
         'Staged deletion of NAT SNAT rule "tsav-snat"' \
-        "$SCLI_SESSION_OUTPUT"
-    assert_text_contains "save: del nat dnat tsav-dnat" \
+        firewall nat snat del tsav-snat
+
+    assert_success "save: del nat dnat tsav-dnat" \
         'Staged deletion of NAT DNAT rule "tsav-dnat"' \
-        "$SCLI_SESSION_OUTPUT"
+        firewall nat dnat del tsav-dnat
 
     # ===== PHASE 5: Save again (apply deletions) =====
-    assert_text_contains "save: apply all deletions" \
-        "confirmed and saved" \
-        "$SCLI_SESSION_OUTPUT"
+    TOTAL=$((TOTAL + 1))
+    local del_save_output del_save_exit=0
+    del_save_output=$(echo "Y" | "$SCLI_BIN" firewall save 2>&1) || del_save_exit=$?
+    if printf '%s\n' "$del_save_output" | grep -qF "confirmed and saved"; then
+        PASS=$((PASS + 1))
+        printf "  ${GREEN}PASS${NC}  save: apply all deletions\n"
+    else
+        FAIL=$((FAIL + 1))
+        FAILURES+=("save: apply all deletions")
+        printf "  ${RED}FAIL${NC}  save: apply all deletions\n"
+        printf "        expected: confirmed and saved\n"
+        printf "        got (exit=%d): %s\n" "$del_save_exit" "$del_save_output"
+    fi
+    verbose_log "echo Y | scli firewall save" "$del_save_output" "$del_save_exit"
 
     # ===== PHASE 6: Verify rules removed from kernel =====
 
@@ -2018,39 +2013,91 @@ test_save_rollback() {
     section "SAVE + ROLLBACK VERIFICATION (live)"
     cleanup_staging
 
-    # ===== PHASE 1: Stage rules across multiple categories =====
+    # ===== PHASE 1: Stage rules across multiple categories (ONESHOT mode) =====
     local bypass_added=false
-    local stage_cmds=(
-        "firewall icmp4 add input accept echo-request outside 10.98.0.0/16 trol-icmp-v4"
-        "firewall icmp6 add input accept echo-request outside fd98::/64 trol-icmp-v6"
-        "firewall icmp4 add input drop type-code 3/4 outside 10.98.1.0/24 trol-icmp-tc"
-        "firewall icmp4 add input accept echo-request outside 10.98.2.0/24 trol-icmp-log --logging"
-        "firewall access-policy add inside accept trol-ap-in 10.98.3.0/24 10.98.4.0/24 -p tcp --dport 8080"
-        "firewall access-policy add outside accept trol-ap-out 0.0.0.0/0 10.98.5.0/24 -p tcp --dport 443"
-        "firewall vpn-policy add in deny trol-vpn-in-deny 10.98.6.0/24 0.0.0.0/0 -p tcp --dport 22"
-        "firewall vpn-policy add out deny trol-vpn-out-deny 10.98.7.0/24 0.0.0.0/0 -p udp --dport 53"
-        "firewall vpn-policy add in bypass trol-vpn-in-bypass 10.98.8.0/24 0.0.0.0/0 -p tcp --dport 80"
-        "firewall nat masquerade add trol-masq 10.98.9.0/24 0.0.0.0/0"
-        "firewall nat snat add trol-snat 10.98.10.0/24 0.0.0.0/0 --to-source 203.0.113.98:9090 -p tcp --dport 80"
-        "firewall nat dnat add trol-dnat 0.0.0.0/0 203.0.113.97 --to-destination 10.98.11.100:8080 -p tcp --dport 8080"
-        "firewall save"
-        "N"
-    )
-    capture_scli_session "${stage_cmds[@]}"
-    assert_captured_session_success "rollback session: stage + save + N"
-    if [ "$SCLI_SESSION_EXIT" -ne 0 ]; then
-        return
-    fi
 
-    # ===== PHASE 2: Verify rollback message =====
-    assert_text_contains "rollback: rolled back message" \
-        "Rolled back firewall changes" \
-        "$SCLI_SESSION_OUTPUT"
+    # -- ICMPv4 --
+    assert_success "rollback: stage icmp4 echo-request" \
+        'Staged new ICMPv4 rule "trol-icmp-v4"' \
+        firewall icmp4 add input accept echo-request outside 10.98.0.0/16 trol-icmp-v4
 
-    # Check if bypass was actually staged (XFRM may not be available)
-    if printf '%s\n' "$SCLI_SESSION_OUTPUT" | grep -qF 'Staged new vpn-policy in rule "trol-vpn-in-bypass"'; then
+    # -- ICMPv6 --
+    assert_success "rollback: stage icmp6 echo-request" \
+        'Staged new ICMPv6 rule "trol-icmp-v6"' \
+        firewall icmp6 add input accept echo-request outside fd98::/64 trol-icmp-v6
+
+    # -- ICMPv4 type-code --
+    assert_success "rollback: stage icmp4 type-code 3/4" \
+        'Staged new ICMPv4 rule "trol-icmp-tc"' \
+        firewall icmp4 add input drop type-code 3/4 outside 10.98.1.0/24 trol-icmp-tc
+
+    # -- ICMPv4 --logging --
+    assert_success "rollback: stage icmp4 echo-request --logging" \
+        'Staged new ICMPv4 rule "trol-icmp-log"' \
+        firewall icmp4 add input accept echo-request outside 10.98.2.0/24 trol-icmp-log --logging
+
+    # -- Access-policy --
+    assert_success "rollback: stage access-policy inside" \
+        'Staged new inside access-policy rule "trol-ap-in"' \
+        firewall access-policy add inside accept trol-ap-in 10.98.3.0/24 10.98.4.0/24 -p tcp --dport 8080
+
+    assert_success "rollback: stage access-policy outside" \
+        'Staged new outside access-policy rule "trol-ap-out"' \
+        firewall access-policy add outside accept trol-ap-out 0.0.0.0/0 10.98.5.0/24 -p tcp --dport 443
+
+    # -- VPN deny --
+    assert_success "rollback: stage vpn-policy in deny" \
+        'Staged new vpn-policy in rule "trol-vpn-in-deny" (action=deny)' \
+        firewall vpn-policy add in deny trol-vpn-in-deny 10.98.6.0/24 0.0.0.0/0 -p tcp --dport 22
+
+    assert_success "rollback: stage vpn-policy out deny" \
+        'Staged new vpn-policy out rule "trol-vpn-out-deny" (action=deny)' \
+        firewall vpn-policy add out deny trol-vpn-out-deny 10.98.7.0/24 0.0.0.0/0 -p udp --dport 53
+
+    # -- VPN in bypass (may require XFRM scripts — skip gracefully) --
+    local bypass_output bypass_exit=0
+    bypass_output=$(scli_run firewall vpn-policy add in bypass trol-vpn-in-bypass 10.98.8.0/24 0.0.0.0/0 -p tcp --dport 80) || bypass_exit=$?
+    if printf '%s\n' "$bypass_output" | grep -qF 'Staged new vpn-policy in rule "trol-vpn-in-bypass"'; then
+        TOTAL=$((TOTAL + 1)); PASS=$((PASS + 1))
+        printf "  ${GREEN}PASS${NC}  rollback: stage vpn-policy in bypass\n"
         bypass_added=true
+    elif printf '%s\n' "$bypass_output" | grep -qi "no such file\|not found\|xfrm"; then
+        skip_test "rollback: stage vpn-policy in bypass" "XFRM scripts not available"
+    else
+        TOTAL=$((TOTAL + 1)); FAIL=$((FAIL + 1)); FAILURES+=("rollback: stage vpn-policy in bypass")
+        printf "  ${RED}FAIL${NC}  rollback: stage vpn-policy in bypass\n"
+        printf "        output: %s\n" "$bypass_output"
     fi
+    verbose_log "firewall vpn-policy add in bypass trol-vpn-in-bypass ..." "$bypass_output" "$bypass_exit"
+
+    # -- NAT --
+    assert_success "rollback: stage nat masquerade" \
+        'Staged new NAT masquerade rule "trol-masq"' \
+        firewall nat masquerade add trol-masq 10.98.9.0/24 0.0.0.0/0
+
+    assert_success "rollback: stage nat snat" \
+        'Staged new NAT SNAT rule "trol-snat"' \
+        firewall nat snat add trol-snat 10.98.10.0/24 0.0.0.0/0 --to-source 203.0.113.98:9090 -p tcp --dport 80
+
+    assert_success "rollback: stage nat dnat" \
+        'Staged new NAT DNAT rule "trol-dnat"' \
+        firewall nat dnat add trol-dnat 0.0.0.0/0 203.0.113.97 --to-destination 10.98.11.100:8080 -p tcp --dport 8080
+
+    # ===== PHASE 2: Save + reject with N (ONESHOT — pipe N directly) =====
+    TOTAL=$((TOTAL + 1))
+    local save_output save_exit=0
+    save_output=$(echo "N" | "$SCLI_BIN" firewall save 2>&1) || save_exit=$?
+    if printf '%s\n' "$save_output" | grep -qF "Rolled back firewall changes"; then
+        PASS=$((PASS + 1))
+        printf "  ${GREEN}PASS${NC}  rollback: rolled back message\n"
+    else
+        FAIL=$((FAIL + 1))
+        FAILURES+=("rollback: rolled back message")
+        printf "  ${RED}FAIL${NC}  rollback: rolled back message\n"
+        printf "        expected: Rolled back firewall changes\n"
+        printf "        got (exit=%d): %s\n" "$save_exit" "$save_output"
+    fi
+    verbose_log "echo N | scli firewall save" "$save_output" "$save_exit"
 
     # ===== PHASE 3: Verify rules are NOT in kernel after rollback =====
 
@@ -2200,37 +2247,39 @@ main() {
     # Clean any leftover staging
     cleanup_staging
 
-    # Run all test sections
-    test_show_commands
-    test_icmp4_lifecycle
-    test_icmp6_lifecycle
-    test_icmp4_fwd_lifecycle
-    test_icmp6_fwd_lifecycle
-    test_icmp4_type_code
-    test_icmp6_type_code
-    test_icmp_logging
-    test_inside_filter_lifecycle
-    test_outside_filter_lifecycle
-    test_vpn_in_lifecycle
-    test_vpn_out_lifecycle
-    test_nat_masquerade_lifecycle
-    test_nat_snat_lifecycle
-    test_nat_dnat_lifecycle
-    test_reset_command
-    test_validation_errors
-    test_save_guard
+    # Run all test sections (--only <pattern> filters by function name)
+    run_test test_show_commands
+    run_test test_icmp4_lifecycle
+    run_test test_icmp6_lifecycle
+    run_test test_icmp4_fwd_lifecycle
+    run_test test_icmp6_fwd_lifecycle
+    run_test test_icmp4_type_code
+    run_test test_icmp6_type_code
+    run_test test_icmp_logging
+    run_test test_inside_filter_lifecycle
+    run_test test_outside_filter_lifecycle
+    run_test test_vpn_in_lifecycle
+    run_test test_vpn_out_lifecycle
+    run_test test_nat_masquerade_lifecycle
+    run_test test_nat_snat_lifecycle
+    run_test test_nat_dnat_lifecycle
+    run_test test_reset_command
+    run_test test_validation_errors
+    run_test test_save_guard
 
     # Live save tests (only when --live is passed)
     if $LIVE; then
-        test_save_and_verify
-        test_save_rollback
+        run_test test_save_and_verify
+        run_test test_save_rollback
     else
-        section "SAVE + KERNEL VERIFICATION (skipped, use --live)"
-        section "SAVE + ROLLBACK VERIFICATION (skipped, use --live)"
+        if [ -z "$ONLY" ]; then
+            section "SAVE + KERNEL VERIFICATION (skipped, use --live)"
+            section "SAVE + ROLLBACK VERIFICATION (skipped, use --live)"
+        fi
     fi
 
-    test_ipset_commands
-    test_anti_spoof_commands
+    run_test test_ipset_commands
+    run_test test_anti_spoof_commands
 
     # Final cleanup
     cleanup_staging

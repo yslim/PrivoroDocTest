@@ -66,8 +66,12 @@ test_commands_command() {
         commands
 
     # List subcommands of specific command
-    assert_output_contains "commands firewall" \
-        "icmp" \
+    assert_output_contains "commands firewall lists icmp4" \
+        "icmp4" \
+        commands firewall
+
+    assert_output_contains "commands firewall lists icmp6" \
+        "icmp6" \
         commands firewall
 
     assert_output_contains "commands network" \

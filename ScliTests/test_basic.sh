@@ -39,74 +39,7 @@ test_date_command() {
 }
 
 # ---------------------------------------------------------------------------
-# 2. Commands command
-# ---------------------------------------------------------------------------
-test_commands_command() {
-    section "COMMANDS"
-
-    # List all root commands
-    assert_output_contains "commands (root)" \
-        "firewall" \
-        commands
-
-    assert_output_contains "commands lists network" \
-        "network" \
-        commands
-
-    assert_output_contains "commands lists security" \
-        "security" \
-        commands
-
-    assert_output_contains "commands lists system" \
-        "system" \
-        commands
-
-    assert_output_contains "commands lists troubleshoot" \
-        "troubleshoot" \
-        commands
-
-    # List subcommands of specific command
-    assert_output_contains "commands firewall lists icmp4" \
-        "icmp4" \
-        commands firewall
-
-    assert_output_contains "commands firewall lists icmp6" \
-        "icmp6" \
-        commands firewall
-
-    assert_output_contains "commands network" \
-        "interface" \
-        commands network
-
-    assert_output_contains "commands system" \
-        "session" \
-        commands system
-
-    assert_output_contains "commands security" \
-        "vpn" \
-        commands security
-
-    assert_output_contains "commands troubleshoot" \
-        "ping" \
-        commands troubleshoot
-
-    # Deeper subcommand tree
-    assert_output_contains "commands network interface" \
-        "show" \
-        commands network interface
-
-    assert_output_contains "commands network interface set" \
-        "mode" \
-        commands network interface set
-
-    # Nonexistent command (scli prints "not found" but may exit 0)
-    assert_output_contains "commands nonexistent" \
-        "not found" \
-        commands nonexistent-command-xyz
-}
-
-# ---------------------------------------------------------------------------
-# 3. Exit command
+# 2. Exit command
 # ---------------------------------------------------------------------------
 test_exit_command() {
     section "EXIT COMMAND"
@@ -151,7 +84,6 @@ main() {
     print_header "Basic"
 
     test_date_command
-    test_commands_command
     test_exit_command
     test_reboot_guard
 

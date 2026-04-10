@@ -221,54 +221,54 @@ check_order "outside after move: out-B, out-A" "$output" "out-B" "out-A"
 cleanup
 
 # =========================================================================
-# TEST 7: ICMP move v4
+# TEST 7: ICMPv4 move
 # =========================================================================
-log_test "ICMP move v4"
+log_test "ICMPv4 move"
 
-$SCLI firewall icmp add input accept echo-request outside 0.0.0.0/0 icmp-A
-$SCLI firewall icmp add input accept echo-reply outside 0.0.0.0/0 icmp-B
-$SCLI firewall icmp add input drop echo-request outside 10.0.0.0/8 icmp-C
+$SCLI firewall icmp4 add input accept echo outside 0.0.0.0/0 icmp-A
+$SCLI firewall icmp4 add input accept echo-reply outside 0.0.0.0/0 icmp-B
+$SCLI firewall icmp4 add input drop echo outside 10.0.0.0/8 icmp-C
 
-output=$($SCLI firewall show icmp input outside 2>&1)
-check_order "icmp initial: A,B,C" "$output" "icmp-A" "icmp-B" "icmp-C"
+output=$($SCLI firewall show icmp4 input outside 2>&1)
+check_order "icmp4 initial: A,B,C" "$output" "icmp-A" "icmp-B" "icmp-C"
 
-run_ok "icmp move v4 3 to 1" $SCLI firewall icmp move input outside v4 3 1
+run_ok "icmp4 move 3 to 1" $SCLI firewall icmp4 move input outside 3 1
 
-output=$($SCLI firewall show icmp input outside 2>&1)
-check_order "icmp after move: C,A,B" "$output" "icmp-C" "icmp-A" "icmp-B"
+output=$($SCLI firewall show icmp4 input outside 2>&1)
+check_order "icmp4 after move: C,A,B" "$output" "icmp-C" "icmp-A" "icmp-B"
 
 cleanup
 
 # =========================================================================
-# TEST 8: ICMP move v6
+# TEST 8: ICMPv6 move
 # =========================================================================
-log_test "ICMP move v6"
+log_test "ICMPv6 move"
 
-$SCLI firewall icmp add input accept echo-request outside ::/0 icmp6-A
-$SCLI firewall icmp add input accept echo-reply outside ::/0 icmp6-B
-$SCLI firewall icmp add input drop echo-request outside 2001:db8::/32 icmp6-C
+$SCLI firewall icmp6 add input accept echo-request outside ::/0 icmp6-A
+$SCLI firewall icmp6 add input accept echo-reply outside ::/0 icmp6-B
+$SCLI firewall icmp6 add input drop echo-request outside 2001:db8::/32 icmp6-C
 
-output=$($SCLI firewall show icmp input outside 2>&1)
-check_order "icmp v6 initial: A,B,C" "$output" "icmp6-A" "icmp6-B" "icmp6-C"
+output=$($SCLI firewall show icmp6 input outside 2>&1)
+check_order "icmp6 initial: A,B,C" "$output" "icmp6-A" "icmp6-B" "icmp6-C"
 
-run_ok "icmp move v6 3 to 1" $SCLI firewall icmp move input outside v6 3 1
+run_ok "icmp6 move 3 to 1" $SCLI firewall icmp6 move input outside 3 1
 
-output=$($SCLI firewall show icmp input outside 2>&1)
-check_order "icmp v6 after move: C,A,B" "$output" "icmp6-C" "icmp6-A" "icmp6-B"
+output=$($SCLI firewall show icmp6 input outside 2>&1)
+check_order "icmp6 after move: C,A,B" "$output" "icmp6-C" "icmp6-A" "icmp6-B"
 
 cleanup
 
 # =========================================================================
-# TEST 9: ICMP forward zone
+# TEST 9: ICMPv4 forward zone move
 # =========================================================================
-log_test "ICMP move forward/inside"
+log_test "ICMPv4 move forward/inside"
 
-$SCLI firewall icmp add forward accept echo-request inside 10.0.0.0/8 fwd-A
-$SCLI firewall icmp add forward drop echo-request inside 172.16.0.0/12 fwd-B
+$SCLI firewall icmp4 add forward accept echo inside 10.0.0.0/8 fwd-A
+$SCLI firewall icmp4 add forward drop echo inside 172.16.0.0/12 fwd-B
 
-run_ok "icmp move forward inside v4 2 to 1" $SCLI firewall icmp move forward inside v4 2 1
+run_ok "icmp4 move forward inside 2 to 1" $SCLI firewall icmp4 move forward inside 2 1
 
-output=$($SCLI firewall show icmp forward inside 2>&1)
+output=$($SCLI firewall show icmp4 forward inside 2>&1)
 check_order "fwd inside after move: B,A" "$output" "fwd-B" "fwd-A"
 
 cleanup

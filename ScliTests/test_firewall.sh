@@ -211,29 +211,53 @@ assert_xfrm_not_contains() {
 test_show_commands() {
     section "SHOW COMMANDS (read-only)"
 
-    assert_output_contains "show icmp input outside" \
-        "Firewall ICMP Rules (input/outside)" \
-        firewall show icmp input outside
+    assert_output_contains "show icmp4 input outside" \
+        "Firewall ICMPv4 Rules (input/outside)" \
+        firewall show icmp4 input outside
 
-    assert_output_contains "show icmp input inside" \
-        "Firewall ICMP Rules (input/inside)" \
-        firewall show icmp input inside
+    assert_output_contains "show icmp4 input inside" \
+        "Firewall ICMPv4 Rules (input/inside)" \
+        firewall show icmp4 input inside
 
-    assert_output_contains "show icmp input vti" \
-        "Firewall ICMP Rules (input/vti)" \
-        firewall show icmp input vti
+    assert_output_contains "show icmp4 input vti" \
+        "Firewall ICMPv4 Rules (input/vti)" \
+        firewall show icmp4 input vti
 
-    assert_output_contains "show icmp forward outside" \
-        "Firewall ICMP Rules (forward/outside)" \
-        firewall show icmp forward outside
+    assert_output_contains "show icmp4 forward outside" \
+        "Firewall ICMPv4 Rules (forward/outside)" \
+        firewall show icmp4 forward outside
 
-    assert_output_contains "show icmp forward inside" \
-        "Firewall ICMP Rules (forward/inside)" \
-        firewall show icmp forward inside
+    assert_output_contains "show icmp4 forward inside" \
+        "Firewall ICMPv4 Rules (forward/inside)" \
+        firewall show icmp4 forward inside
 
-    assert_output_contains "show icmp forward vti" \
-        "Firewall ICMP Rules (forward/vti)" \
-        firewall show icmp forward vti
+    assert_output_contains "show icmp4 forward vti" \
+        "Firewall ICMPv4 Rules (forward/vti)" \
+        firewall show icmp4 forward vti
+
+    assert_output_contains "show icmp6 input outside" \
+        "Firewall ICMPv6 Rules (input/outside)" \
+        firewall show icmp6 input outside
+
+    assert_output_contains "show icmp6 input inside" \
+        "Firewall ICMPv6 Rules (input/inside)" \
+        firewall show icmp6 input inside
+
+    assert_output_contains "show icmp6 input vti" \
+        "Firewall ICMPv6 Rules (input/vti)" \
+        firewall show icmp6 input vti
+
+    assert_output_contains "show icmp6 forward outside" \
+        "Firewall ICMPv6 Rules (forward/outside)" \
+        firewall show icmp6 forward outside
+
+    assert_output_contains "show icmp6 forward inside" \
+        "Firewall ICMPv6 Rules (forward/inside)" \
+        firewall show icmp6 forward inside
+
+    assert_output_contains "show icmp6 forward vti" \
+        "Firewall ICMPv6 Rules (forward/vti)" \
+        firewall show icmp6 forward vti
 
     assert_output_contains "show access-policy inside" \
         "Access Policy Rules (inside)" \
@@ -281,408 +305,711 @@ test_show_commands() {
 }
 
 # ---------------------------------------------------------------------------
-# 2. ICMP lifecycle (IPv4)
+# 2. ICMPv4 lifecycle
 # ---------------------------------------------------------------------------
-test_icmp_lifecycle() {
-    section "ICMP RULES LIFECYCLE (IPv4)"
+test_icmp4_lifecycle() {
+    section "ICMPv4 RULES LIFECYCLE"
     cleanup_staging
 
-    # --- Add (existing types) ---
-    assert_success "icmp add echo-request outside" \
-        'Staged new ICMP rule "test-icmp-out"' \
-        firewall icmp add input accept echo-request outside 10.0.0.0/8 test-icmp-out
+    # --- Add (core types) ---
+    assert_success "icmp4 add echo outside" \
+        'Staged new ICMPv4 rule "test-icmp-out"' \
+        firewall icmp4 add input accept echo outside 10.0.0.0/8 test-icmp-out
 
-    assert_success "icmp add echo-reply inside" \
-        'Staged new ICMP rule "test-icmp-in"' \
-        firewall icmp add input accept echo-reply inside 192.168.0.0/16 test-icmp-in
+    assert_success "icmp4 add echo-reply inside" \
+        'Staged new ICMPv4 rule "test-icmp-in"' \
+        firewall icmp4 add input accept echo-reply inside 192.168.0.0/16 test-icmp-in
 
-    assert_success "icmp add dest-unreachable vti" \
-        'Staged new ICMP rule "test-icmp-vti"' \
-        firewall icmp add input accept destination-unreachable vti 172.16.0.0/12 test-icmp-vti
+    assert_success "icmp4 add unreachable vti" \
+        'Staged new ICMPv4 rule "test-icmp-vti"' \
+        firewall icmp4 add input accept unreachable vti 172.16.0.0/12 test-icmp-vti
 
-    assert_success "icmp add any outside" \
-        'Staged new ICMP rule "test-icmp-any"' \
-        firewall icmp add input accept any outside 10.1.0.0/16 test-icmp-any
+    assert_success "icmp4 add any outside" \
+        'Staged new ICMPv4 rule "test-icmp-any"' \
+        firewall icmp4 add input accept any outside 10.1.0.0/16 test-icmp-any
 
-    assert_success "icmp add time-exceeded outside" \
-        'Staged new ICMP rule "test-icmp-te"' \
-        firewall icmp add input accept time-exceeded outside 10.2.0.0/16 test-icmp-te
+    assert_success "icmp4 add time-exceeded outside" \
+        'Staged new ICMPv4 rule "test-icmp-te"' \
+        firewall icmp4 add input accept time-exceeded outside 10.2.0.0/16 test-icmp-te
 
-    # --- Add (0222 new IPv4 types) ---
-    assert_success "icmp add timestamp-request outside" \
-        'Staged new ICMP rule "test-icmp-ts-req"' \
-        firewall icmp add input accept timestamp-request outside 10.3.0.0/16 test-icmp-ts-req
+    # --- Add (extended IPv4 types) ---
+    assert_success "icmp4 add timestamp-request outside" \
+        'Staged new ICMPv4 rule "test-icmp-ts-req"' \
+        firewall icmp4 add input accept timestamp-request outside 10.3.0.0/16 test-icmp-ts-req
 
-    assert_success "icmp add timestamp-reply outside" \
-        'Staged new ICMP rule "test-icmp-ts-rep"' \
-        firewall icmp add input accept timestamp-reply outside 10.4.0.0/16 test-icmp-ts-rep
+    assert_success "icmp4 add timestamp-reply outside" \
+        'Staged new ICMPv4 rule "test-icmp-ts-rep"' \
+        firewall icmp4 add input accept timestamp-reply outside 10.4.0.0/16 test-icmp-ts-rep
 
-    assert_success "icmp add parameter-problem outside" \
-        'Staged new ICMP rule "test-icmp-pp"' \
-        firewall icmp add input accept parameter-problem outside 10.5.0.0/16 test-icmp-pp
+    assert_success "icmp4 add parameter-problem outside" \
+        'Staged new ICMPv4 rule "test-icmp-pp"' \
+        firewall icmp4 add input accept parameter-problem outside 10.5.0.0/16 test-icmp-pp
 
-    assert_success "icmp add dest-unreachable/fragmentation-needed outside" \
-        'Staged new ICMP rule "test-icmp-frag"' \
-        firewall icmp add input accept destination-unreachable/fragmentation-needed outside 10.6.0.0/16 test-icmp-frag
+    assert_success "icmp4 add source-quench outside" \
+        'Staged new ICMPv4 rule "test-icmp-sq"' \
+        firewall icmp4 add input accept source-quench outside 10.6.0.0/16 test-icmp-sq
+
+    assert_success "icmp4 add redirect outside" \
+        'Staged new ICMPv4 rule "test-icmp-redir"' \
+        firewall icmp4 add input accept redirect outside 10.7.0.0/16 test-icmp-redir
+
+    assert_success "icmp4 add router-advertisement outside" \
+        'Staged new ICMPv4 rule "test-icmp-ra"' \
+        firewall icmp4 add input accept router-advertisement outside 10.8.0.0/16 test-icmp-ra
+
+    assert_success "icmp4 add router-solicitation outside" \
+        'Staged new ICMPv4 rule "test-icmp-rs"' \
+        firewall icmp4 add input accept router-solicitation outside 10.9.0.0/16 test-icmp-rs
+
+    assert_success "icmp4 add mask-request outside" \
+        'Staged new ICMPv4 rule "test-icmp-mreq"' \
+        firewall icmp4 add input accept mask-request outside 10.10.0.0/16 test-icmp-mreq
+
+    assert_success "icmp4 add mask-reply outside" \
+        'Staged new ICMPv4 rule "test-icmp-mrep"' \
+        firewall icmp4 add input accept mask-reply outside 10.11.0.0/16 test-icmp-mrep
+
+    # --- Add (drop action) ---
+    assert_success "icmp4 add drop echo outside" \
+        'Staged new ICMPv4 rule "test-icmp-drop"' \
+        firewall icmp4 add input drop echo outside 10.12.0.0/16 test-icmp-drop
 
     # --- Show (verify ALL staged rules appear) ---
-    assert_output_contains "show icmp input outside -> test-icmp-out" \
+    assert_output_contains "show icmp4 input outside -> test-icmp-out" \
         "test-icmp-out" \
-        firewall show icmp input outside
+        firewall show icmp4 input outside
 
-    assert_output_contains "show icmp input outside -> test-icmp-any" \
+    assert_output_contains "show icmp4 input outside -> test-icmp-any" \
         "test-icmp-any" \
-        firewall show icmp input outside
+        firewall show icmp4 input outside
 
-    assert_output_contains "show icmp input outside -> test-icmp-te" \
+    assert_output_contains "show icmp4 input outside -> test-icmp-te" \
         "test-icmp-te" \
-        firewall show icmp input outside
+        firewall show icmp4 input outside
 
-    assert_output_contains "show icmp input outside -> test-icmp-ts-req" \
+    assert_output_contains "show icmp4 input outside -> test-icmp-ts-req" \
         "test-icmp-ts-req" \
-        firewall show icmp input outside
+        firewall show icmp4 input outside
 
-    assert_output_contains "show icmp input outside -> test-icmp-ts-rep" \
+    assert_output_contains "show icmp4 input outside -> test-icmp-ts-rep" \
         "test-icmp-ts-rep" \
-        firewall show icmp input outside
+        firewall show icmp4 input outside
 
-    assert_output_contains "show icmp input outside -> test-icmp-pp" \
+    assert_output_contains "show icmp4 input outside -> test-icmp-pp" \
         "test-icmp-pp" \
-        firewall show icmp input outside
+        firewall show icmp4 input outside
 
-    assert_output_contains "show icmp input outside -> test-icmp-frag" \
-        "test-icmp-frag" \
-        firewall show icmp input outside
+    assert_output_contains "show icmp4 input outside -> test-icmp-sq" \
+        "test-icmp-sq" \
+        firewall show icmp4 input outside
 
-    assert_output_contains "show icmp input inside -> test-icmp-in" \
+    assert_output_contains "show icmp4 input outside -> test-icmp-redir" \
+        "test-icmp-redir" \
+        firewall show icmp4 input outside
+
+    assert_output_contains "show icmp4 input outside -> test-icmp-ra" \
+        "test-icmp-ra" \
+        firewall show icmp4 input outside
+
+    assert_output_contains "show icmp4 input outside -> test-icmp-rs" \
+        "test-icmp-rs" \
+        firewall show icmp4 input outside
+
+    assert_output_contains "show icmp4 input outside -> test-icmp-mreq" \
+        "test-icmp-mreq" \
+        firewall show icmp4 input outside
+
+    assert_output_contains "show icmp4 input outside -> test-icmp-mrep" \
+        "test-icmp-mrep" \
+        firewall show icmp4 input outside
+
+    assert_output_contains "show icmp4 input inside -> test-icmp-in" \
         "test-icmp-in" \
-        firewall show icmp input inside
+        firewall show icmp4 input inside
 
-    assert_output_contains "show icmp input vti -> test-icmp-vti" \
+    assert_output_contains "show icmp4 input vti -> test-icmp-vti" \
         "test-icmp-vti" \
-        firewall show icmp input vti
+        firewall show icmp4 input vti
 
     # --- Duplicate add ---
-    assert_error "icmp add duplicate" \
+    assert_error "icmp4 add duplicate" \
         "already exists" \
-        firewall icmp add input accept echo-request outside 10.0.0.0/8 test-icmp-out
+        firewall icmp4 add input accept echo outside 10.0.0.0/8 test-icmp-out
 
     # --- Delete + show verification ---
-    assert_success "icmp del test-icmp-out" \
-        'Staged deletion of input ICMP rule "test-icmp-out"' \
-        firewall icmp del input test-icmp-out
+    assert_success "icmp4 del test-icmp-out" \
+        'Staged deletion of input ICMPv4 rule "test-icmp-out"' \
+        firewall icmp4 del input test-icmp-out
 
-    assert_output_not_contains "show icmp input outside after del test-icmp-out" \
+    assert_output_not_contains "show icmp4 input outside after del test-icmp-out" \
         "test-icmp-out" \
-        firewall show icmp input outside
+        firewall show icmp4 input outside
 
-    assert_success "icmp del test-icmp-in" \
-        'Staged deletion of input ICMP rule "test-icmp-in"' \
-        firewall icmp del input test-icmp-in
+    assert_success "icmp4 del test-icmp-in" \
+        'Staged deletion of input ICMPv4 rule "test-icmp-in"' \
+        firewall icmp4 del input test-icmp-in
 
-    assert_output_not_contains "show icmp input inside after del test-icmp-in" \
+    assert_output_not_contains "show icmp4 input inside after del test-icmp-in" \
         "test-icmp-in" \
-        firewall show icmp input inside
+        firewall show icmp4 input inside
 
-    assert_success "icmp del test-icmp-vti" \
-        'Staged deletion of input ICMP rule "test-icmp-vti"' \
-        firewall icmp del input test-icmp-vti
+    assert_success "icmp4 del test-icmp-vti" \
+        'Staged deletion of input ICMPv4 rule "test-icmp-vti"' \
+        firewall icmp4 del input test-icmp-vti
 
-    assert_output_not_contains "show icmp input vti after del test-icmp-vti" \
+    assert_output_not_contains "show icmp4 input vti after del test-icmp-vti" \
         "test-icmp-vti" \
-        firewall show icmp input vti
+        firewall show icmp4 input vti
 
-    assert_success "icmp del test-icmp-any" \
-        'Staged deletion of input ICMP rule "test-icmp-any"' \
-        firewall icmp del input test-icmp-any
+    assert_success "icmp4 del test-icmp-any" \
+        'Staged deletion of input ICMPv4 rule "test-icmp-any"' \
+        firewall icmp4 del input test-icmp-any
 
-    assert_output_not_contains "show icmp input outside after del test-icmp-any" \
+    assert_output_not_contains "show icmp4 input outside after del test-icmp-any" \
         "test-icmp-any" \
-        firewall show icmp input outside
+        firewall show icmp4 input outside
 
-    assert_success "icmp del test-icmp-te" \
-        'Staged deletion of input ICMP rule "test-icmp-te"' \
-        firewall icmp del input test-icmp-te
+    assert_success "icmp4 del test-icmp-te" \
+        'Staged deletion of input ICMPv4 rule "test-icmp-te"' \
+        firewall icmp4 del input test-icmp-te
 
-    assert_output_not_contains "show icmp input outside after del test-icmp-te" \
+    assert_output_not_contains "show icmp4 input outside after del test-icmp-te" \
         "test-icmp-te" \
-        firewall show icmp input outside
+        firewall show icmp4 input outside
 
-    assert_success "icmp del test-icmp-ts-req" \
-        'Staged deletion of input ICMP rule "test-icmp-ts-req"' \
-        firewall icmp del input test-icmp-ts-req
+    assert_success "icmp4 del test-icmp-ts-req" \
+        'Staged deletion of input ICMPv4 rule "test-icmp-ts-req"' \
+        firewall icmp4 del input test-icmp-ts-req
 
-    assert_output_not_contains "show icmp input outside after del test-icmp-ts-req" \
-        "test-icmp-ts-req" \
-        firewall show icmp input outside
+    assert_success "icmp4 del test-icmp-ts-rep" \
+        'Staged deletion of input ICMPv4 rule "test-icmp-ts-rep"' \
+        firewall icmp4 del input test-icmp-ts-rep
 
-    assert_success "icmp del test-icmp-ts-rep" \
-        'Staged deletion of input ICMP rule "test-icmp-ts-rep"' \
-        firewall icmp del input test-icmp-ts-rep
+    assert_success "icmp4 del test-icmp-pp" \
+        'Staged deletion of input ICMPv4 rule "test-icmp-pp"' \
+        firewall icmp4 del input test-icmp-pp
 
-    assert_output_not_contains "show icmp input outside after del test-icmp-ts-rep" \
-        "test-icmp-ts-rep" \
-        firewall show icmp input outside
+    assert_success "icmp4 del test-icmp-sq" \
+        'Staged deletion of input ICMPv4 rule "test-icmp-sq"' \
+        firewall icmp4 del input test-icmp-sq
 
-    assert_success "icmp del test-icmp-pp" \
-        'Staged deletion of input ICMP rule "test-icmp-pp"' \
-        firewall icmp del input test-icmp-pp
+    assert_success "icmp4 del test-icmp-redir" \
+        'Staged deletion of input ICMPv4 rule "test-icmp-redir"' \
+        firewall icmp4 del input test-icmp-redir
 
-    assert_output_not_contains "show icmp input outside after del test-icmp-pp" \
-        "test-icmp-pp" \
-        firewall show icmp input outside
+    assert_success "icmp4 del test-icmp-ra" \
+        'Staged deletion of input ICMPv4 rule "test-icmp-ra"' \
+        firewall icmp4 del input test-icmp-ra
 
-    assert_success "icmp del test-icmp-frag" \
-        'Staged deletion of input ICMP rule "test-icmp-frag"' \
-        firewall icmp del input test-icmp-frag
+    assert_success "icmp4 del test-icmp-rs" \
+        'Staged deletion of input ICMPv4 rule "test-icmp-rs"' \
+        firewall icmp4 del input test-icmp-rs
 
-    assert_output_not_contains "show icmp input outside after del test-icmp-frag" \
-        "test-icmp-frag" \
-        firewall show icmp input outside
+    assert_success "icmp4 del test-icmp-mreq" \
+        'Staged deletion of input ICMPv4 rule "test-icmp-mreq"' \
+        firewall icmp4 del input test-icmp-mreq
+
+    assert_success "icmp4 del test-icmp-mrep" \
+        'Staged deletion of input ICMPv4 rule "test-icmp-mrep"' \
+        firewall icmp4 del input test-icmp-mrep
+
+    assert_success "icmp4 del test-icmp-drop" \
+        'Staged deletion of input ICMPv4 rule "test-icmp-drop"' \
+        firewall icmp4 del input test-icmp-drop
 
     # --- Delete nonexistent ---
-    assert_error "icmp del nonexistent" \
+    assert_error "icmp4 del nonexistent" \
         "no matching rule" \
-        firewall icmp del input nonexistent-rule-xyz
+        firewall icmp4 del input nonexistent-rule-xyz
 
     cleanup_staging
 }
 
 # ---------------------------------------------------------------------------
-# 2b. ICMP lifecycle (IPv6)
+# 2b. ICMPv6 lifecycle
 # ---------------------------------------------------------------------------
-test_icmp_v6_lifecycle() {
-    section "ICMP RULES LIFECYCLE (IPv6)"
+test_icmp6_lifecycle() {
+    section "ICMPv6 RULES LIFECYCLE"
     cleanup_staging
 
     # --- Add (V6-only types) ---
-    assert_success "icmpv6 add packet-too-big outside" \
-        'Staged new ICMP rule "test-icmp6-ptb"' \
-        firewall icmp add input accept packet-too-big outside fd00::/64 test-icmp6-ptb
+    assert_success "icmp6 add packet-too-big outside" \
+        'Staged new ICMPv6 rule "test-icmp6-ptb"' \
+        firewall icmp6 add input accept packet-too-big outside fd00::/64 test-icmp6-ptb
 
-    assert_success "icmpv6 add neighbor-solicitation outside" \
-        'Staged new ICMP rule "test-icmp6-ns"' \
-        firewall icmp add input accept neighbor-solicitation outside fd00::/64 test-icmp6-ns
+    assert_success "icmp6 add neighbor-solicitation outside" \
+        'Staged new ICMPv6 rule "test-icmp6-ns"' \
+        firewall icmp6 add input accept neighbor-solicitation outside fd00::/64 test-icmp6-ns
 
-    assert_success "icmpv6 add neighbor-advertisement outside" \
-        'Staged new ICMP rule "test-icmp6-na"' \
-        firewall icmp add input accept neighbor-advertisement outside fd00::/64 test-icmp6-na
+    assert_success "icmp6 add neighbor-advertisement outside" \
+        'Staged new ICMPv6 rule "test-icmp6-na"' \
+        firewall icmp6 add input accept neighbor-advertisement outside fd00::/64 test-icmp6-na
 
-    assert_success "icmpv6 add ml-query outside" \
-        'Staged new ICMP rule "test-icmp6-mlq"' \
-        firewall icmp add input accept ml-query outside fd00::/64 test-icmp6-mlq
+    assert_success "icmp6 add ml-query outside" \
+        'Staged new ICMPv6 rule "test-icmp6-mlq"' \
+        firewall icmp6 add input accept ml-query outside fd00::/64 test-icmp6-mlq
 
-    assert_success "icmpv6 add ml-report outside" \
-        'Staged new ICMP rule "test-icmp6-mlr"' \
-        firewall icmp add input accept ml-report outside fd00::/64 test-icmp6-mlr
+    assert_success "icmp6 add ml-report outside" \
+        'Staged new ICMPv6 rule "test-icmp6-mlr"' \
+        firewall icmp6 add input accept ml-report outside fd00::/64 test-icmp6-mlr
 
-    assert_success "icmpv6 add ml-done outside" \
-        'Staged new ICMP rule "test-icmp6-mld"' \
-        firewall icmp add input accept ml-done outside fd00::/64 test-icmp6-mld
+    assert_success "icmp6 add ml-done outside" \
+        'Staged new ICMPv6 rule "test-icmp6-mld"' \
+        firewall icmp6 add input accept ml-done outside fd00::/64 test-icmp6-mld
 
     # --- Add (common types with IPv6 addresses) ---
-    assert_success "icmpv6 add echo-request outside" \
-        'Staged new ICMP rule "test-icmp6-echo"' \
-        firewall icmp add input accept echo-request outside 2001:db8::/32 test-icmp6-echo
+    assert_success "icmp6 add echo-request outside" \
+        'Staged new ICMPv6 rule "test-icmp6-echo"' \
+        firewall icmp6 add input accept echo-request outside 2001:db8::/32 test-icmp6-echo
 
-    assert_success "icmpv6 add destination-unreachable inside" \
-        'Staged new ICMP rule "test-icmp6-du"' \
-        firewall icmp add input accept destination-unreachable inside fd00::/64 test-icmp6-du
+    assert_success "icmp6 add destination-unreachable inside" \
+        'Staged new ICMPv6 rule "test-icmp6-du"' \
+        firewall icmp6 add input accept destination-unreachable inside fd00::/64 test-icmp6-du
 
-    assert_success "icmpv6 add parameter-problem vti" \
-        'Staged new ICMP rule "test-icmp6-pp"' \
-        firewall icmp add input accept parameter-problem vti fd00::/64 test-icmp6-pp
+    assert_success "icmp6 add parameter-problem vti" \
+        'Staged new ICMPv6 rule "test-icmp6-pp"' \
+        firewall icmp6 add input accept parameter-problem vti fd00::/64 test-icmp6-pp
+
+    assert_success "icmp6 add router-solicitation outside" \
+        'Staged new ICMPv6 rule "test-icmp6-rs"' \
+        firewall icmp6 add input accept router-solicitation outside fd00::/64 test-icmp6-rs
+
+    assert_success "icmp6 add router-advertisement outside" \
+        'Staged new ICMPv6 rule "test-icmp6-ra"' \
+        firewall icmp6 add input accept router-advertisement outside fd00::/64 test-icmp6-ra
+
+    assert_success "icmp6 add redirect outside" \
+        'Staged new ICMPv6 rule "test-icmp6-redir"' \
+        firewall icmp6 add input accept redirect outside fd00::/64 test-icmp6-redir
 
     # --- Show (verify ALL staged rules appear) ---
-    assert_output_contains "show icmp input outside -> test-icmp6-ptb" \
+    assert_output_contains "show icmp6 input outside -> test-icmp6-ptb" \
         "test-icmp6-ptb" \
-        firewall show icmp input outside
+        firewall show icmp6 input outside
 
-    assert_output_contains "show icmp input outside -> test-icmp6-ns" \
+    assert_output_contains "show icmp6 input outside -> test-icmp6-ns" \
         "test-icmp6-ns" \
-        firewall show icmp input outside
+        firewall show icmp6 input outside
 
-    assert_output_contains "show icmp input outside -> test-icmp6-na" \
+    assert_output_contains "show icmp6 input outside -> test-icmp6-na" \
         "test-icmp6-na" \
-        firewall show icmp input outside
+        firewall show icmp6 input outside
 
-    assert_output_contains "show icmp input outside -> test-icmp6-mlq" \
+    assert_output_contains "show icmp6 input outside -> test-icmp6-mlq" \
         "test-icmp6-mlq" \
-        firewall show icmp input outside
+        firewall show icmp6 input outside
 
-    assert_output_contains "show icmp input outside -> test-icmp6-mlr" \
+    assert_output_contains "show icmp6 input outside -> test-icmp6-mlr" \
         "test-icmp6-mlr" \
-        firewall show icmp input outside
+        firewall show icmp6 input outside
 
-    assert_output_contains "show icmp input outside -> test-icmp6-mld" \
+    assert_output_contains "show icmp6 input outside -> test-icmp6-mld" \
         "test-icmp6-mld" \
-        firewall show icmp input outside
+        firewall show icmp6 input outside
 
-    assert_output_contains "show icmp input outside -> test-icmp6-echo" \
+    assert_output_contains "show icmp6 input outside -> test-icmp6-echo" \
         "test-icmp6-echo" \
-        firewall show icmp input outside
+        firewall show icmp6 input outside
 
-    assert_output_contains "show icmp input inside -> test-icmp6-du" \
+    assert_output_contains "show icmp6 input outside -> test-icmp6-rs" \
+        "test-icmp6-rs" \
+        firewall show icmp6 input outside
+
+    assert_output_contains "show icmp6 input outside -> test-icmp6-ra" \
+        "test-icmp6-ra" \
+        firewall show icmp6 input outside
+
+    assert_output_contains "show icmp6 input outside -> test-icmp6-redir" \
+        "test-icmp6-redir" \
+        firewall show icmp6 input outside
+
+    assert_output_contains "show icmp6 input inside -> test-icmp6-du" \
         "test-icmp6-du" \
-        firewall show icmp input inside
+        firewall show icmp6 input inside
 
-    assert_output_contains "show icmp input vti -> test-icmp6-pp" \
+    assert_output_contains "show icmp6 input vti -> test-icmp6-pp" \
         "test-icmp6-pp" \
-        firewall show icmp input vti
+        firewall show icmp6 input vti
 
     # --- Duplicate add ---
-    assert_error "icmpv6 add duplicate" \
+    assert_error "icmp6 add duplicate" \
         "already exists" \
-        firewall icmp add input accept packet-too-big outside fd00::/64 test-icmp6-ptb
+        firewall icmp6 add input accept packet-too-big outside fd00::/64 test-icmp6-ptb
 
     # --- Delete + show verification ---
-    assert_success "icmpv6 del test-icmp6-ptb" \
-        'Staged deletion of input ICMP rule "test-icmp6-ptb"' \
-        firewall icmp del input test-icmp6-ptb
+    assert_success "icmp6 del test-icmp6-ptb" \
+        'Staged deletion of input ICMPv6 rule "test-icmp6-ptb"' \
+        firewall icmp6 del input test-icmp6-ptb
 
-    assert_output_not_contains "show icmp input outside after del test-icmp6-ptb" \
+    assert_output_not_contains "show icmp6 input outside after del test-icmp6-ptb" \
         "test-icmp6-ptb" \
-        firewall show icmp input outside
+        firewall show icmp6 input outside
 
-    assert_success "icmpv6 del test-icmp6-ns" \
-        'Staged deletion of input ICMP rule "test-icmp6-ns"' \
-        firewall icmp del input test-icmp6-ns
+    assert_success "icmp6 del test-icmp6-ns" \
+        'Staged deletion of input ICMPv6 rule "test-icmp6-ns"' \
+        firewall icmp6 del input test-icmp6-ns
 
-    assert_output_not_contains "show icmp input outside after del test-icmp6-ns" \
-        "test-icmp6-ns" \
-        firewall show icmp input outside
+    assert_success "icmp6 del test-icmp6-na" \
+        'Staged deletion of input ICMPv6 rule "test-icmp6-na"' \
+        firewall icmp6 del input test-icmp6-na
 
-    assert_success "icmpv6 del test-icmp6-na" \
-        'Staged deletion of input ICMP rule "test-icmp6-na"' \
-        firewall icmp del input test-icmp6-na
+    assert_success "icmp6 del test-icmp6-mlq" \
+        'Staged deletion of input ICMPv6 rule "test-icmp6-mlq"' \
+        firewall icmp6 del input test-icmp6-mlq
 
-    assert_output_not_contains "show icmp input outside after del test-icmp6-na" \
-        "test-icmp6-na" \
-        firewall show icmp input outside
+    assert_success "icmp6 del test-icmp6-mlr" \
+        'Staged deletion of input ICMPv6 rule "test-icmp6-mlr"' \
+        firewall icmp6 del input test-icmp6-mlr
 
-    assert_success "icmpv6 del test-icmp6-mlq" \
-        'Staged deletion of input ICMP rule "test-icmp6-mlq"' \
-        firewall icmp del input test-icmp6-mlq
+    assert_success "icmp6 del test-icmp6-mld" \
+        'Staged deletion of input ICMPv6 rule "test-icmp6-mld"' \
+        firewall icmp6 del input test-icmp6-mld
 
-    assert_output_not_contains "show icmp input outside after del test-icmp6-mlq" \
-        "test-icmp6-mlq" \
-        firewall show icmp input outside
+    assert_success "icmp6 del test-icmp6-echo" \
+        'Staged deletion of input ICMPv6 rule "test-icmp6-echo"' \
+        firewall icmp6 del input test-icmp6-echo
 
-    assert_success "icmpv6 del test-icmp6-mlr" \
-        'Staged deletion of input ICMP rule "test-icmp6-mlr"' \
-        firewall icmp del input test-icmp6-mlr
+    assert_success "icmp6 del test-icmp6-du" \
+        'Staged deletion of input ICMPv6 rule "test-icmp6-du"' \
+        firewall icmp6 del input test-icmp6-du
 
-    assert_output_not_contains "show icmp input outside after del test-icmp6-mlr" \
-        "test-icmp6-mlr" \
-        firewall show icmp input outside
+    assert_success "icmp6 del test-icmp6-pp" \
+        'Staged deletion of input ICMPv6 rule "test-icmp6-pp"' \
+        firewall icmp6 del input test-icmp6-pp
 
-    assert_success "icmpv6 del test-icmp6-mld" \
-        'Staged deletion of input ICMP rule "test-icmp6-mld"' \
-        firewall icmp del input test-icmp6-mld
+    assert_success "icmp6 del test-icmp6-rs" \
+        'Staged deletion of input ICMPv6 rule "test-icmp6-rs"' \
+        firewall icmp6 del input test-icmp6-rs
 
-    assert_output_not_contains "show icmp input outside after del test-icmp6-mld" \
-        "test-icmp6-mld" \
-        firewall show icmp input outside
+    assert_success "icmp6 del test-icmp6-ra" \
+        'Staged deletion of input ICMPv6 rule "test-icmp6-ra"' \
+        firewall icmp6 del input test-icmp6-ra
 
-    assert_success "icmpv6 del test-icmp6-echo" \
-        'Staged deletion of input ICMP rule "test-icmp6-echo"' \
-        firewall icmp del input test-icmp6-echo
-
-    assert_output_not_contains "show icmp input outside after del test-icmp6-echo" \
-        "test-icmp6-echo" \
-        firewall show icmp input outside
-
-    assert_success "icmpv6 del test-icmp6-du" \
-        'Staged deletion of input ICMP rule "test-icmp6-du"' \
-        firewall icmp del input test-icmp6-du
-
-    assert_output_not_contains "show icmp input inside after del test-icmp6-du" \
-        "test-icmp6-du" \
-        firewall show icmp input inside
-
-    assert_success "icmpv6 del test-icmp6-pp" \
-        'Staged deletion of input ICMP rule "test-icmp6-pp"' \
-        firewall icmp del input test-icmp6-pp
-
-    assert_output_not_contains "show icmp input vti after del test-icmp6-pp" \
-        "test-icmp6-pp" \
-        firewall show icmp input vti
+    assert_success "icmp6 del test-icmp6-redir" \
+        'Staged deletion of input ICMPv6 rule "test-icmp6-redir"' \
+        firewall icmp6 del input test-icmp6-redir
 
     # --- Delete nonexistent ---
-    assert_error "icmpv6 del nonexistent" \
+    assert_error "icmp6 del nonexistent" \
         "no matching rule" \
-        firewall icmp del input nonexistent-v6-rule-xyz
+        firewall icmp6 del input nonexistent-v6-rule-xyz
 
     cleanup_staging
 }
 
 # ---------------------------------------------------------------------------
-# 2c. ICMP FORWARD lifecycle
+# 2c. ICMPv4 FORWARD lifecycle
 # ---------------------------------------------------------------------------
-test_icmp_fwd_lifecycle() {
-    section "ICMP FORWARD RULES LIFECYCLE"
+test_icmp4_fwd_lifecycle() {
+    section "ICMPv4 FORWARD RULES LIFECYCLE"
     cleanup_staging
 
     # --- Add (forward + accept) ---
-    assert_success "icmp add forward accept echo-request outside" \
-        'Staged new ICMP rule "test-fwd-echo"' \
-        firewall icmp add forward accept echo-request outside 10.0.0.0/8 test-fwd-echo
+    assert_success "icmp4 add forward accept echo outside" \
+        'Staged new ICMPv4 rule "test-fwd-echo"' \
+        firewall icmp4 add forward accept echo outside 10.0.0.0/8 test-fwd-echo
 
-    assert_success "icmp add forward drop echo-request inside" \
-        'Staged new ICMP rule "test-fwd-drop"' \
-        firewall icmp add forward drop echo-request inside 192.168.0.0/16 test-fwd-drop
+    assert_success "icmp4 add forward drop echo inside" \
+        'Staged new ICMPv4 rule "test-fwd-drop"' \
+        firewall icmp4 add forward drop echo inside 192.168.0.0/16 test-fwd-drop
 
-    assert_success "icmp add forward accept destination-unreachable vti" \
-        'Staged new ICMP rule "test-fwd-vti"' \
-        firewall icmp add forward accept destination-unreachable vti 172.16.0.0/12 test-fwd-vti
+    assert_success "icmp4 add forward accept unreachable vti" \
+        'Staged new ICMPv4 rule "test-fwd-vti"' \
+        firewall icmp4 add forward accept unreachable vti 172.16.0.0/12 test-fwd-vti
 
     # --- Show (verify ALL staged rules appear) ---
-    assert_output_contains "show icmp forward outside -> test-fwd-echo" \
+    assert_output_contains "show icmp4 forward outside -> test-fwd-echo" \
         "test-fwd-echo" \
-        firewall show icmp forward outside
+        firewall show icmp4 forward outside
 
-    assert_output_contains "show icmp forward inside -> test-fwd-drop" \
+    assert_output_contains "show icmp4 forward inside -> test-fwd-drop" \
         "test-fwd-drop" \
-        firewall show icmp forward inside
+        firewall show icmp4 forward inside
 
-    assert_output_contains "show icmp forward vti -> test-fwd-vti" \
+    assert_output_contains "show icmp4 forward vti -> test-fwd-vti" \
         "test-fwd-vti" \
-        firewall show icmp forward vti
+        firewall show icmp4 forward vti
 
     # --- Duplicate add ---
-    assert_error "icmp add forward duplicate" \
+    assert_error "icmp4 add forward duplicate" \
         "already exists" \
-        firewall icmp add forward accept echo-request outside 10.0.0.0/8 test-fwd-echo
+        firewall icmp4 add forward accept echo outside 10.0.0.0/8 test-fwd-echo
 
     # --- Delete + show verification ---
-    assert_success "icmp del forward test-fwd-echo" \
-        'Staged deletion of forward ICMP rule "test-fwd-echo"' \
-        firewall icmp del forward test-fwd-echo
+    assert_success "icmp4 del forward test-fwd-echo" \
+        'Staged deletion of forward ICMPv4 rule "test-fwd-echo"' \
+        firewall icmp4 del forward test-fwd-echo
 
-    assert_output_not_contains "show icmp forward outside after del test-fwd-echo" \
+    assert_output_not_contains "show icmp4 forward outside after del test-fwd-echo" \
         "test-fwd-echo" \
-        firewall show icmp forward outside
+        firewall show icmp4 forward outside
 
-    assert_success "icmp del forward test-fwd-drop" \
-        'Staged deletion of forward ICMP rule "test-fwd-drop"' \
-        firewall icmp del forward test-fwd-drop
+    assert_success "icmp4 del forward test-fwd-drop" \
+        'Staged deletion of forward ICMPv4 rule "test-fwd-drop"' \
+        firewall icmp4 del forward test-fwd-drop
 
-    assert_output_not_contains "show icmp forward inside after del test-fwd-drop" \
+    assert_output_not_contains "show icmp4 forward inside after del test-fwd-drop" \
         "test-fwd-drop" \
-        firewall show icmp forward inside
+        firewall show icmp4 forward inside
 
-    assert_success "icmp del forward test-fwd-vti" \
-        'Staged deletion of forward ICMP rule "test-fwd-vti"' \
-        firewall icmp del forward test-fwd-vti
+    assert_success "icmp4 del forward test-fwd-vti" \
+        'Staged deletion of forward ICMPv4 rule "test-fwd-vti"' \
+        firewall icmp4 del forward test-fwd-vti
 
-    assert_output_not_contains "show icmp forward vti after del test-fwd-vti" \
+    assert_output_not_contains "show icmp4 forward vti after del test-fwd-vti" \
         "test-fwd-vti" \
-        firewall show icmp forward vti
+        firewall show icmp4 forward vti
 
     # --- Delete nonexistent ---
-    assert_error "icmp del forward nonexistent" \
+    assert_error "icmp4 del forward nonexistent" \
         "no matching rule" \
-        firewall icmp del forward nonexistent-fwd-rule-xyz
+        firewall icmp4 del forward nonexistent-fwd-rule-xyz
+
+    cleanup_staging
+}
+
+# ---------------------------------------------------------------------------
+# 2d. ICMPv6 FORWARD lifecycle
+# ---------------------------------------------------------------------------
+test_icmp6_fwd_lifecycle() {
+    section "ICMPv6 FORWARD RULES LIFECYCLE"
+    cleanup_staging
+
+    # --- Add (forward) ---
+    assert_success "icmp6 add forward accept echo-request outside" \
+        'Staged new ICMPv6 rule "test-fwd6-echo"' \
+        firewall icmp6 add forward accept echo-request outside fd00::/64 test-fwd6-echo
+
+    assert_success "icmp6 add forward drop destination-unreachable inside" \
+        'Staged new ICMPv6 rule "test-fwd6-drop"' \
+        firewall icmp6 add forward drop destination-unreachable inside 2001:db8::/32 test-fwd6-drop
+
+    assert_success "icmp6 add forward accept packet-too-big vti" \
+        'Staged new ICMPv6 rule "test-fwd6-vti"' \
+        firewall icmp6 add forward accept packet-too-big vti fd00::/64 test-fwd6-vti
+
+    # --- Show ---
+    assert_output_contains "show icmp6 forward outside -> test-fwd6-echo" \
+        "test-fwd6-echo" \
+        firewall show icmp6 forward outside
+
+    assert_output_contains "show icmp6 forward inside -> test-fwd6-drop" \
+        "test-fwd6-drop" \
+        firewall show icmp6 forward inside
+
+    assert_output_contains "show icmp6 forward vti -> test-fwd6-vti" \
+        "test-fwd6-vti" \
+        firewall show icmp6 forward vti
+
+    # --- Delete ---
+    assert_success "icmp6 del forward test-fwd6-echo" \
+        'Staged deletion of forward ICMPv6 rule "test-fwd6-echo"' \
+        firewall icmp6 del forward test-fwd6-echo
+
+    assert_success "icmp6 del forward test-fwd6-drop" \
+        'Staged deletion of forward ICMPv6 rule "test-fwd6-drop"' \
+        firewall icmp6 del forward test-fwd6-drop
+
+    assert_success "icmp6 del forward test-fwd6-vti" \
+        'Staged deletion of forward ICMPv6 rule "test-fwd6-vti"' \
+        firewall icmp6 del forward test-fwd6-vti
+
+    cleanup_staging
+}
+
+# ---------------------------------------------------------------------------
+# 2e. ICMPv4 type-code (numeric) input
+# ---------------------------------------------------------------------------
+test_icmp4_type_code() {
+    section "ICMPv4 TYPE-CODE (numeric)"
+    cleanup_staging
+
+    # --- Add with type only (e.g. type 3 = destination-unreachable) ---
+    assert_success "icmp4 type-code add type-only (3)" \
+        'Staged new ICMPv4 rule "test-tc-type3"' \
+        firewall icmp4 add input accept type-code 3 outside 10.0.0.0/8 test-tc-type3
+
+    # --- Add with type/code (e.g. 3/4 = fragmentation-needed) ---
+    assert_success "icmp4 type-code add 3/4 (frag-needed)" \
+        'Staged new ICMPv4 rule "test-tc-frag"' \
+        firewall icmp4 add input accept type-code 3/4 outside 10.1.0.0/16 test-tc-frag
+
+    # --- Add with type/code (e.g. 11/0 = ttl-zero-during-transit) ---
+    assert_success "icmp4 type-code add 11/0 (ttl-exceeded)" \
+        'Staged new ICMPv4 rule "test-tc-ttl"' \
+        firewall icmp4 add input drop type-code 11/0 inside 192.168.0.0/16 test-tc-ttl
+
+    # --- Add with type/code (e.g. 3/10 = host-precedence-violation) ---
+    assert_success "icmp4 type-code add 3/10" \
+        'Staged new ICMPv4 rule "test-tc-310"' \
+        firewall icmp4 add forward drop type-code 3/10 inside 10.10.0.0/16 test-tc-310
+
+    # --- Show (verify staged rules appear) ---
+    assert_output_contains "show icmp4 input outside -> test-tc-type3" \
+        "test-tc-type3" \
+        firewall show icmp4 input outside
+
+    assert_output_contains "show icmp4 input outside -> test-tc-frag" \
+        "test-tc-frag" \
+        firewall show icmp4 input outside
+
+    assert_output_contains "show icmp4 input inside -> test-tc-ttl" \
+        "test-tc-ttl" \
+        firewall show icmp4 input inside
+
+    assert_output_contains "show icmp4 forward inside -> test-tc-310" \
+        "test-tc-310" \
+        firewall show icmp4 forward inside
+
+    # --- Delete ---
+    assert_success "icmp4 del test-tc-type3" \
+        'Staged deletion of input ICMPv4 rule "test-tc-type3"' \
+        firewall icmp4 del input test-tc-type3
+
+    assert_success "icmp4 del test-tc-frag" \
+        'Staged deletion of input ICMPv4 rule "test-tc-frag"' \
+        firewall icmp4 del input test-tc-frag
+
+    assert_success "icmp4 del test-tc-ttl" \
+        'Staged deletion of input ICMPv4 rule "test-tc-ttl"' \
+        firewall icmp4 del input test-tc-ttl
+
+    assert_success "icmp4 del test-tc-310" \
+        'Staged deletion of forward ICMPv4 rule "test-tc-310"' \
+        firewall icmp4 del forward test-tc-310
+
+    # --- Invalid type-code ---
+    assert_error "icmp4 type-code invalid (256)" \
+        "invalid ICMP type" \
+        firewall icmp4 add input accept type-code 256 outside 10.0.0.0/8 test-tc-err
+
+    assert_error "icmp4 type-code invalid (abc)" \
+        "invalid ICMP type" \
+        firewall icmp4 add input accept type-code abc outside 10.0.0.0/8 test-tc-err
+
+    assert_error "icmp4 type-code invalid code (3/256)" \
+        "invalid ICMP code" \
+        firewall icmp4 add input accept type-code 3/256 outside 10.0.0.0/8 test-tc-err
+
+    # --- Invalid zone in type-code ---
+    assert_error "icmp4 type-code invalid zone" \
+        "invalid zone" \
+        firewall icmp4 add input accept type-code 3 badzone 10.0.0.0/8 test-tc-err
+
+    cleanup_staging
+}
+
+# ---------------------------------------------------------------------------
+# 2f. ICMPv6 type-code (numeric) input
+# ---------------------------------------------------------------------------
+test_icmp6_type_code() {
+    section "ICMPv6 TYPE-CODE (numeric)"
+    cleanup_staging
+
+    # --- Add with type only (e.g. type 128 = echo-request) ---
+    assert_success "icmp6 type-code add type-only (128)" \
+        'Staged new ICMPv6 rule "test-tc6-echo"' \
+        firewall icmp6 add input accept type-code 128 outside fd00::/64 test-tc6-echo
+
+    # --- Add with type/code (e.g. 1/3 = address-unreachable) ---
+    assert_success "icmp6 type-code add 1/3 (addr-unreachable)" \
+        'Staged new ICMPv6 rule "test-tc6-addr"' \
+        firewall icmp6 add input drop type-code 1/3 inside 2001:db8::/32 test-tc6-addr
+
+    # --- Add forward ---
+    assert_success "icmp6 type-code add forward 2 (pkt-too-big)" \
+        'Staged new ICMPv6 rule "test-tc6-ptb"' \
+        firewall icmp6 add forward accept type-code 2 outside fd00::/64 test-tc6-ptb
+
+    # --- Show ---
+    assert_output_contains "show icmp6 input outside -> test-tc6-echo" \
+        "test-tc6-echo" \
+        firewall show icmp6 input outside
+
+    assert_output_contains "show icmp6 input inside -> test-tc6-addr" \
+        "test-tc6-addr" \
+        firewall show icmp6 input inside
+
+    assert_output_contains "show icmp6 forward outside -> test-tc6-ptb" \
+        "test-tc6-ptb" \
+        firewall show icmp6 forward outside
+
+    # --- Delete ---
+    assert_success "icmp6 del test-tc6-echo" \
+        'Staged deletion of input ICMPv6 rule "test-tc6-echo"' \
+        firewall icmp6 del input test-tc6-echo
+
+    assert_success "icmp6 del test-tc6-addr" \
+        'Staged deletion of input ICMPv6 rule "test-tc6-addr"' \
+        firewall icmp6 del input test-tc6-addr
+
+    assert_success "icmp6 del test-tc6-ptb" \
+        'Staged deletion of forward ICMPv6 rule "test-tc6-ptb"' \
+        firewall icmp6 del forward test-tc6-ptb
+
+    cleanup_staging
+}
+
+# ---------------------------------------------------------------------------
+# 2g. ICMP --logging flag (NIAP FAU_GEN.1)
+# ---------------------------------------------------------------------------
+test_icmp_logging() {
+    section "ICMP --logging FLAG"
+    cleanup_staging
+
+    # --- ICMPv4 with --logging (accept → AKITA_LOG_ACCEPT) ---
+    assert_success "icmp4 add echo outside --logging" \
+        'Staged new ICMPv4 rule "test-log-accept"' \
+        firewall icmp4 add input accept echo outside 10.0.0.0/8 test-log-accept --logging
+
+    # --- ICMPv4 with --logging (drop → AKITA_LOG_DROP) ---
+    assert_success "icmp4 add drop echo outside --logging" \
+        'Staged new ICMPv4 rule "test-log-drop"' \
+        firewall icmp4 add input drop echo outside 10.1.0.0/16 test-log-drop --logging
+
+    # --- ICMPv6 with --logging ---
+    assert_success "icmp6 add echo-request outside --logging" \
+        'Staged new ICMPv6 rule "test-log6-accept"' \
+        firewall icmp6 add input accept echo-request outside fd00::/64 test-log6-accept --logging
+
+    # --- ICMPv4 type-code with --logging ---
+    assert_success "icmp4 type-code 3/4 --logging" \
+        'Staged new ICMPv4 rule "test-log-tc"' \
+        firewall icmp4 add input drop type-code 3/4 outside 10.2.0.0/16 test-log-tc --logging
+
+    # --- Show (verify staged) ---
+    assert_output_contains "show icmp4 input outside -> test-log-accept" \
+        "test-log-accept" \
+        firewall show icmp4 input outside
+
+    assert_output_contains "show icmp4 input outside -> test-log-drop" \
+        "test-log-drop" \
+        firewall show icmp4 input outside
+
+    assert_output_contains "show icmp6 input outside -> test-log6-accept" \
+        "test-log6-accept" \
+        firewall show icmp6 input outside
+
+    assert_output_contains "show icmp4 input outside -> test-log-tc" \
+        "test-log-tc" \
+        firewall show icmp4 input outside
+
+    # --- Delete ---
+    assert_success "icmp4 del test-log-accept" \
+        'Staged deletion of input ICMPv4 rule "test-log-accept"' \
+        firewall icmp4 del input test-log-accept
+
+    assert_success "icmp4 del test-log-drop" \
+        'Staged deletion of input ICMPv4 rule "test-log-drop"' \
+        firewall icmp4 del input test-log-drop
+
+    assert_success "icmp6 del test-log6-accept" \
+        'Staged deletion of input ICMPv6 rule "test-log6-accept"' \
+        firewall icmp6 del input test-log6-accept
+
+    assert_success "icmp4 del test-log-tc" \
+        'Staged deletion of input ICMPv4 rule "test-log-tc"' \
+        firewall icmp4 del input test-log-tc
 
     cleanup_staging
 }
@@ -1294,7 +1621,7 @@ test_reset_command() {
         firewall reset
 
     # Create some staging, then reset
-    scli_run firewall icmp add input accept echo-request outside 10.0.0.0/8 test-reset-rule >/dev/null 2>&1 || true
+    scli_run firewall icmp4 add input accept echo outside 10.0.0.0/8 test-reset-rule >/dev/null 2>&1 || true
 
     assert_output_contains "reset with staging" \
         "Staged firewall changes discarded" \
@@ -1371,15 +1698,29 @@ test_validation_errors() {
         "required" \
         firewall nat dnat add test-val-err 10.0.0.0/8 0.0.0.0/0
 
-    # --- Invalid ICMP type (unknown subcommand) ---
-    assert_error "invalid icmp type" \
+    # --- Invalid ICMPv4 type (unknown subcommand) ---
+    assert_error "invalid icmp4 type" \
         "" \
-        firewall icmp add input accept bogus-type outside 10.0.0.0/8 test-val-err
+        firewall icmp4 add input accept bogus-type outside 10.0.0.0/8 test-val-err
 
     # --- Invalid zone (unknown subcommand under icmp type) — cobra shows usage ---
-    assert_output_contains "invalid icmp zone shows usage" \
+    assert_output_contains "invalid icmp4 zone shows usage" \
         "Available Commands" \
-        firewall icmp add input accept echo-request badzone 10.0.0.0/8 test-val-err
+        firewall icmp4 add input accept echo badzone 10.0.0.0/8 test-val-err
+
+    # --- Invalid ICMPv6 type ---
+    assert_error "invalid icmp6 type" \
+        "" \
+        firewall icmp6 add input accept bogus-v6-type outside fd00::/64 test-val-err
+
+    # --- ICMPv4 type-code validation ---
+    assert_error "icmp4 type-code out of range" \
+        "invalid ICMP type" \
+        firewall icmp4 add input accept type-code 300 outside 10.0.0.0/8 test-val-err
+
+    assert_error "icmp4 type-code non-numeric" \
+        "invalid ICMP type" \
+        firewall icmp4 add input accept type-code xyz outside 10.0.0.0/8 test-val-err
 
     cleanup_staging
 }
@@ -1409,8 +1750,10 @@ test_save_and_verify() {
     # ===== PHASE 1: Stage rules across all categories =====
     local bypass_added=false
     local stage_cmds=(
-        "firewall icmp add input accept echo-request outside 10.99.0.0/16 tsav-icmp-v4"
-        "firewall icmp add input accept echo-request inside fd99::/64 tsav-icmp-v6"
+        "firewall icmp4 add input accept echo outside 10.99.0.0/16 tsav-icmp-v4"
+        "firewall icmp6 add input accept echo-request outside fd99::/64 tsav-icmp-v6"
+        "firewall icmp4 add input accept type-code 3/4 outside 10.99.10.0/24 tsav-icmp-tc"
+        "firewall icmp4 add input drop echo outside 10.99.11.0/24 tsav-icmp-log --logging"
         "firewall access-policy add inside accept tsav-ap-in 10.99.1.0/24 10.99.2.0/24 -p tcp --dport 8080"
         "firewall access-policy add outside accept tsav-ap-out 0.0.0.0/0 10.99.3.0/24 -p tcp --dport 443"
         "firewall vpn-policy add in deny tsav-vpn-in-deny 10.99.4.0/24 0.0.0.0/0 -p tcp --dport 22"
@@ -1428,14 +1771,24 @@ test_save_and_verify() {
         return
     fi
 
-    # -- ICMP (IPv4, outside) --
-    assert_text_contains "save: stage icmp echo-request outside (v4)" \
-        'Staged new ICMP rule "tsav-icmp-v4"' \
+    # -- ICMPv4 (outside) --
+    assert_text_contains "save: stage icmp4 echo outside" \
+        'Staged new ICMPv4 rule "tsav-icmp-v4"' \
         "$SCLI_SESSION_OUTPUT"
 
-    # -- ICMP (IPv6, inside) --
-    assert_text_contains "save: stage icmp echo-request inside (v6)" \
-        'Staged new ICMP rule "tsav-icmp-v6"' \
+    # -- ICMPv6 (outside) --
+    assert_text_contains "save: stage icmp6 echo-request outside" \
+        'Staged new ICMPv6 rule "tsav-icmp-v6"' \
+        "$SCLI_SESSION_OUTPUT"
+
+    # -- ICMPv4 type-code --
+    assert_text_contains "save: stage icmp4 type-code 3/4" \
+        'Staged new ICMPv4 rule "tsav-icmp-tc"' \
+        "$SCLI_SESSION_OUTPUT"
+
+    # -- ICMPv4 --logging --
+    assert_text_contains "save: stage icmp4 echo drop --logging" \
+        'Staged new ICMPv4 rule "tsav-icmp-log"' \
         "$SCLI_SESSION_OUTPUT"
 
     # -- Access-policy inside (IPv4) --
@@ -1494,13 +1847,21 @@ test_save_and_verify() {
     # ===== PHASE 3: Verify rules exist in kernel =====
     # Using 'iptables -L <chain> -n' to confirm rules landed in the correct chain.
 
-    # -- IPv4 filter: ICMP --
+    # -- IPv4 filter: ICMPv4 --
     assert_iptables_chain_contains "kernel v4: AKITA_ICMP_INPUT_OUTSIDE has tsav-icmp-v4" \
         "AKITA_ICMP_INPUT_OUTSIDE" "tsav-icmp-v4"
 
-    # -- IPv6 filter: ICMP --
-    assert_ip6tables_chain_contains "kernel v6: AKITA_ICMP_INPUT_INSIDE has tsav-icmp-v6" \
-        "AKITA_ICMP_INPUT_INSIDE" "tsav-icmp-v6"
+    # -- IPv4 filter: ICMPv4 type-code 3/4 --
+    assert_iptables_chain_contains "kernel v4: AKITA_ICMP_INPUT_OUTSIDE has tsav-icmp-tc" \
+        "AKITA_ICMP_INPUT_OUTSIDE" "tsav-icmp-tc"
+
+    # -- IPv4 filter: ICMPv4 with logging (should use AKITA_LOG_DROP) --
+    assert_iptables_chain_contains "kernel v4: AKITA_ICMP_INPUT_OUTSIDE has tsav-icmp-log" \
+        "AKITA_ICMP_INPUT_OUTSIDE" "tsav-icmp-log"
+
+    # -- IPv6 filter: ICMPv6 --
+    assert_ip6tables_chain_contains "kernel v6: AKITA_ICMP_INPUT_OUTSIDE has tsav-icmp-v6" \
+        "AKITA_ICMP_INPUT_OUTSIDE" "tsav-icmp-v6"
 
     # -- IPv4 filter: access-policy --
     assert_iptables_chain_contains "kernel v4: AKITA_FW_INSIDE_FILTER has tsav-ap-in" \
@@ -1538,8 +1899,10 @@ test_save_and_verify() {
     # ===== PHASE 4: Delete all rules (staging) =====
 
     local delete_cmds=(
-        "firewall icmp del input tsav-icmp-v4"
-        "firewall icmp del input tsav-icmp-v6"
+        "firewall icmp4 del input tsav-icmp-v4"
+        "firewall icmp6 del input tsav-icmp-v6"
+        "firewall icmp4 del input tsav-icmp-tc"
+        "firewall icmp4 del input tsav-icmp-log"
         "firewall access-policy del inside tsav-ap-in"
         "firewall access-policy del outside tsav-ap-out"
         "firewall vpn-policy del in deny tsav-vpn-in-deny"
@@ -1558,11 +1921,17 @@ test_save_and_verify() {
         return
     fi
 
-    assert_text_contains "save: del icmp tsav-icmp-v4" \
-        'Staged deletion of input ICMP rule "tsav-icmp-v4"' \
+    assert_text_contains "save: del icmp4 tsav-icmp-v4" \
+        'Staged deletion of input ICMPv4 rule "tsav-icmp-v4"' \
         "$SCLI_SESSION_OUTPUT"
-    assert_text_contains "save: del icmp tsav-icmp-v6" \
-        'Staged deletion of input ICMP rule "tsav-icmp-v6"' \
+    assert_text_contains "save: del icmp6 tsav-icmp-v6" \
+        'Staged deletion of input ICMPv6 rule "tsav-icmp-v6"' \
+        "$SCLI_SESSION_OUTPUT"
+    assert_text_contains "save: del icmp4 tsav-icmp-tc" \
+        'Staged deletion of input ICMPv4 rule "tsav-icmp-tc"' \
+        "$SCLI_SESSION_OUTPUT"
+    assert_text_contains "save: del icmp4 tsav-icmp-log" \
+        'Staged deletion of input ICMPv4 rule "tsav-icmp-log"' \
         "$SCLI_SESSION_OUTPUT"
     assert_text_contains "save: del access-policy inside tsav-ap-in" \
         'Staged deletion of inside access-policy rule "tsav-ap-in"' \
@@ -1601,8 +1970,14 @@ test_save_and_verify() {
     assert_iptables_chain_not_contains "kernel v4: AKITA_ICMP_INPUT_OUTSIDE no tsav-icmp-v4" \
         "AKITA_ICMP_INPUT_OUTSIDE" "tsav-icmp-v4"
 
-    assert_ip6tables_chain_not_contains "kernel v6: AKITA_ICMP_INPUT_INSIDE no tsav-icmp-v6" \
-        "AKITA_ICMP_INPUT_INSIDE" "tsav-icmp-v6"
+    assert_iptables_chain_not_contains "kernel v4: AKITA_ICMP_INPUT_OUTSIDE no tsav-icmp-tc" \
+        "AKITA_ICMP_INPUT_OUTSIDE" "tsav-icmp-tc"
+
+    assert_iptables_chain_not_contains "kernel v4: AKITA_ICMP_INPUT_OUTSIDE no tsav-icmp-log" \
+        "AKITA_ICMP_INPUT_OUTSIDE" "tsav-icmp-log"
+
+    assert_ip6tables_chain_not_contains "kernel v6: AKITA_ICMP_INPUT_OUTSIDE no tsav-icmp-v6" \
+        "AKITA_ICMP_INPUT_OUTSIDE" "tsav-icmp-v6"
 
     assert_iptables_chain_not_contains "kernel v4: AKITA_FW_INSIDE_FILTER no tsav-ap-in" \
         "AKITA_FW_INSIDE_FILTER" "tsav-ap-in"
@@ -1733,9 +2108,13 @@ main() {
 
     # Run all test sections
     test_show_commands
-    test_icmp_lifecycle
-    test_icmp_v6_lifecycle
-    test_icmp_fwd_lifecycle
+    test_icmp4_lifecycle
+    test_icmp6_lifecycle
+    test_icmp4_fwd_lifecycle
+    test_icmp6_fwd_lifecycle
+    test_icmp4_type_code
+    test_icmp6_type_code
+    test_icmp_logging
     test_inside_filter_lifecycle
     test_outside_filter_lifecycle
     test_vpn_in_lifecycle

@@ -1698,9 +1698,9 @@ test_validation_errors() {
         "required" \
         firewall nat dnat add test-val-err 10.0.0.0/8 0.0.0.0/0
 
-    # --- Invalid ICMPv4 type (unknown subcommand) ---
-    assert_error "invalid icmp4 type" \
-        "" \
+    # --- Invalid ICMPv4 type (unknown subcommand — cobra shows usage, exit 0) ---
+    assert_output_contains "invalid icmp4 type shows usage" \
+        "Available Commands" \
         firewall icmp4 add input accept bogus-type outside 10.0.0.0/8 test-val-err
 
     # --- Invalid zone (unknown subcommand under icmp type) — cobra shows usage ---
@@ -1708,9 +1708,9 @@ test_validation_errors() {
         "Available Commands" \
         firewall icmp4 add input accept echo-request badzone 10.0.0.0/8 test-val-err
 
-    # --- Invalid ICMPv6 type ---
-    assert_error "invalid icmp6 type" \
-        "" \
+    # --- Invalid ICMPv6 type (unknown subcommand — cobra shows usage, exit 0) ---
+    assert_output_contains "invalid icmp6 type shows usage" \
+        "Available Commands" \
         firewall icmp6 add input accept bogus-v6-type outside fd00::/64 test-val-err
 
     # --- ICMPv4 type-code validation ---

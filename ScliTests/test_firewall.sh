@@ -312,9 +312,9 @@ test_icmp4_lifecycle() {
     cleanup_staging
 
     # --- Add (core types) ---
-    assert_success "icmp4 add echo outside" \
+    assert_success "icmp4 add echo-request outside" \
         'Staged new ICMPv4 rule "test-icmp-out"' \
-        firewall icmp4 add input accept echo outside 10.0.0.0/8 test-icmp-out
+        firewall icmp4 add input accept echo-request outside 10.0.0.0/8 test-icmp-out
 
     assert_success "icmp4 add echo-reply inside" \
         'Staged new ICMPv4 rule "test-icmp-in"' \
@@ -370,9 +370,9 @@ test_icmp4_lifecycle() {
         firewall icmp4 add input accept mask-reply outside 10.11.0.0/16 test-icmp-mrep
 
     # --- Add (drop action) ---
-    assert_success "icmp4 add drop echo outside" \
+    assert_success "icmp4 add drop echo-request outside" \
         'Staged new ICMPv4 rule "test-icmp-drop"' \
-        firewall icmp4 add input drop echo outside 10.12.0.0/16 test-icmp-drop
+        firewall icmp4 add input drop echo-request outside 10.12.0.0/16 test-icmp-drop
 
     # --- Show (verify ALL staged rules appear) ---
     assert_output_contains "show icmp4 input outside -> test-icmp-out" \
@@ -434,7 +434,7 @@ test_icmp4_lifecycle() {
     # --- Duplicate add ---
     assert_error "icmp4 add duplicate" \
         "already exists" \
-        firewall icmp4 add input accept echo outside 10.0.0.0/8 test-icmp-out
+        firewall icmp4 add input accept echo-request outside 10.0.0.0/8 test-icmp-out
 
     # --- Delete + show verification ---
     assert_success "icmp4 del test-icmp-out" \
@@ -705,13 +705,13 @@ test_icmp4_fwd_lifecycle() {
     cleanup_staging
 
     # --- Add (forward + accept) ---
-    assert_success "icmp4 add forward accept echo outside" \
+    assert_success "icmp4 add forward accept echo-request outside" \
         'Staged new ICMPv4 rule "test-fwd-echo"' \
-        firewall icmp4 add forward accept echo outside 10.0.0.0/8 test-fwd-echo
+        firewall icmp4 add forward accept echo-request outside 10.0.0.0/8 test-fwd-echo
 
-    assert_success "icmp4 add forward drop echo inside" \
+    assert_success "icmp4 add forward drop echo-request inside" \
         'Staged new ICMPv4 rule "test-fwd-drop"' \
-        firewall icmp4 add forward drop echo inside 192.168.0.0/16 test-fwd-drop
+        firewall icmp4 add forward drop echo-request inside 192.168.0.0/16 test-fwd-drop
 
     assert_success "icmp4 add forward accept unreachable vti" \
         'Staged new ICMPv4 rule "test-fwd-vti"' \
@@ -733,7 +733,7 @@ test_icmp4_fwd_lifecycle() {
     # --- Duplicate add ---
     assert_error "icmp4 add forward duplicate" \
         "already exists" \
-        firewall icmp4 add forward accept echo outside 10.0.0.0/8 test-fwd-echo
+        firewall icmp4 add forward accept echo-request outside 10.0.0.0/8 test-fwd-echo
 
     # --- Delete + show verification ---
     assert_success "icmp4 del forward test-fwd-echo" \
@@ -958,14 +958,14 @@ test_icmp_logging() {
     cleanup_staging
 
     # --- ICMPv4 with --logging (accept → AKITA_LOG_ACCEPT) ---
-    assert_success "icmp4 add echo outside --logging" \
+    assert_success "icmp4 add echo-request outside --logging" \
         'Staged new ICMPv4 rule "test-log-accept"' \
-        firewall icmp4 add input accept echo outside 10.0.0.0/8 test-log-accept --logging
+        firewall icmp4 add input accept echo-request outside 10.0.0.0/8 test-log-accept --logging
 
     # --- ICMPv4 with --logging (drop → AKITA_LOG_DROP) ---
-    assert_success "icmp4 add drop echo outside --logging" \
+    assert_success "icmp4 add drop echo-request outside --logging" \
         'Staged new ICMPv4 rule "test-log-drop"' \
-        firewall icmp4 add input drop echo outside 10.1.0.0/16 test-log-drop --logging
+        firewall icmp4 add input drop echo-request outside 10.1.0.0/16 test-log-drop --logging
 
     # --- ICMPv6 with --logging ---
     assert_success "icmp6 add echo-request outside --logging" \
@@ -1621,7 +1621,7 @@ test_reset_command() {
         firewall reset
 
     # Create some staging, then reset
-    scli_run firewall icmp4 add input accept echo outside 10.0.0.0/8 test-reset-rule >/dev/null 2>&1 || true
+    scli_run firewall icmp4 add input accept echo-request outside 10.0.0.0/8 test-reset-rule >/dev/null 2>&1 || true
 
     assert_output_contains "reset with staging" \
         "Staged firewall changes discarded" \
@@ -1706,7 +1706,7 @@ test_validation_errors() {
     # --- Invalid zone (unknown subcommand under icmp type) — cobra shows usage ---
     assert_output_contains "invalid icmp4 zone shows usage" \
         "Available Commands" \
-        firewall icmp4 add input accept echo badzone 10.0.0.0/8 test-val-err
+        firewall icmp4 add input accept echo-request badzone 10.0.0.0/8 test-val-err
 
     # --- Invalid ICMPv6 type ---
     assert_error "invalid icmp6 type" \
@@ -1750,10 +1750,10 @@ test_save_and_verify() {
     # ===== PHASE 1: Stage rules across all categories =====
     local bypass_added=false
     local stage_cmds=(
-        "firewall icmp4 add input accept echo outside 10.99.0.0/16 tsav-icmp-v4"
+        "firewall icmp4 add input accept echo-request outside 10.99.0.0/16 tsav-icmp-v4"
         "firewall icmp6 add input accept echo-request outside fd99::/64 tsav-icmp-v6"
         "firewall icmp4 add input accept type-code 3/4 outside 10.99.10.0/24 tsav-icmp-tc"
-        "firewall icmp4 add input drop echo outside 10.99.11.0/24 tsav-icmp-log --logging"
+        "firewall icmp4 add input drop echo-request outside 10.99.11.0/24 tsav-icmp-log --logging"
         "firewall access-policy add inside accept tsav-ap-in 10.99.1.0/24 10.99.2.0/24 -p tcp --dport 8080"
         "firewall access-policy add outside accept tsav-ap-out 0.0.0.0/0 10.99.3.0/24 -p tcp --dport 443"
         "firewall vpn-policy add in deny tsav-vpn-in-deny 10.99.4.0/24 0.0.0.0/0 -p tcp --dport 22"
@@ -1772,7 +1772,7 @@ test_save_and_verify() {
     fi
 
     # -- ICMPv4 (outside) --
-    assert_text_contains "save: stage icmp4 echo outside" \
+    assert_text_contains "save: stage icmp4 echo-request outside" \
         'Staged new ICMPv4 rule "tsav-icmp-v4"' \
         "$SCLI_SESSION_OUTPUT"
 
@@ -1787,7 +1787,7 @@ test_save_and_verify() {
         "$SCLI_SESSION_OUTPUT"
 
     # -- ICMPv4 --logging --
-    assert_text_contains "save: stage icmp4 echo drop --logging" \
+    assert_text_contains "save: stage icmp4 echo-request drop --logging" \
         'Staged new ICMPv4 rule "tsav-icmp-log"' \
         "$SCLI_SESSION_OUTPUT"
 

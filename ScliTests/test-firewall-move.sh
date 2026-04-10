@@ -225,9 +225,9 @@ cleanup
 # =========================================================================
 log_test "ICMPv4 move"
 
-$SCLI firewall icmp4 add input accept echo outside 0.0.0.0/0 icmp-A
+$SCLI firewall icmp4 add input accept echo-request outside 0.0.0.0/0 icmp-A
 $SCLI firewall icmp4 add input accept echo-reply outside 0.0.0.0/0 icmp-B
-$SCLI firewall icmp4 add input drop echo outside 10.0.0.0/8 icmp-C
+$SCLI firewall icmp4 add input drop echo-request outside 10.0.0.0/8 icmp-C
 
 output=$($SCLI firewall show icmp4 input outside 2>&1)
 check_order "icmp4 initial: A,B,C" "$output" "icmp-A" "icmp-B" "icmp-C"
@@ -263,8 +263,8 @@ cleanup
 # =========================================================================
 log_test "ICMPv4 move forward/inside"
 
-$SCLI firewall icmp4 add forward accept echo inside 10.0.0.0/8 fwd-A
-$SCLI firewall icmp4 add forward drop echo inside 172.16.0.0/12 fwd-B
+$SCLI firewall icmp4 add forward accept echo-request inside 10.0.0.0/8 fwd-A
+$SCLI firewall icmp4 add forward drop echo-request inside 172.16.0.0/12 fwd-B
 
 run_ok "icmp4 move forward inside 2 to 1" $SCLI firewall icmp4 move forward inside 2 1
 

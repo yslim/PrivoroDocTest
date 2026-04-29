@@ -1,18 +1,25 @@
 #!/usr/bin/env bash
 # =============================================================================
-# VPN Identity (local-id / remote-id) Test Suite
+# VPN Test Suite (identity + revocation)
 #
-# Tests pubkey and PSK identity configuration for all ID types:
-#   IP, FQDN, Email, DN(Distinguished Name)
+# Identity (local-id / remote-id) for cert-based and PSK auth — covers
+# all ID types: IP, FQDN, Email, DN.  Identity commands moved from
+# 'set pubkey ...' to 'set certs ...' on the vpn-revocation branch.
 #
-# Tests both staging (set/del commands) and, with --live, save + reload
-# verification for StrongSwan (swanctl.conf) and LibreSwan (ipsec.conf).
+# Revocation (ocsp-validation / ocsp-strict / crl-strict /
+# crl-check-interval) under 'security vpn set revocation' subtree.
+# ocsp-strict / crl-strict / crl-check-interval are libreswan-only;
+# strongswan path expects "not supported on strongswan" notice.
+#
+# Tests both staging (set/del commands) and, with --live, save +
+# reload verification for StrongSwan (swanctl.conf) and Libreswan
+# (ipsec.conf).
 #
 # Usage:
-#   bash test_vpn_identity.sh                  # staging tests only
-#   bash test_vpn_identity.sh -v               # verbose
-#   bash test_vpn_identity.sh --live           # include save + file verification
-#   SCLI_BIN=/path/to/scli bash test_vpn_identity.sh
+#   bash test_vpn.sh                  # staging tests only
+#   bash test_vpn.sh -v               # verbose
+#   bash test_vpn.sh --live           # include save + file verification
+#   SCLI_BIN=/path/to/scli bash test_vpn.sh
 #
 # Prerequisites:
 #   - Linux device with VPN engine (strongSwan/Libreswan)
@@ -202,89 +209,89 @@ assert_swanctl_identity_not_present() {
 # =============================================================================
 
 # ---------------------------------------------------------------------------
-# 1. Pubkey local-id / remote-id SET commands (staging)
+# 1. Certs local-id / remote-id SET commands (staging)
 # ---------------------------------------------------------------------------
-test_pubkey_set_identity() {
-    section "PUBKEY SET IDENTITY (staging)"
+test_certs_set_identity() {
+    section "CERTS SET IDENTITY (staging)"
 
     # Switch to pubkey auth first
     scli_run security vpn set auth pubkey >/dev/null 2>&1
 
     # -- local-id --
-    assert_success "pubkey set local-id (FQDN)" \
-        "Staged: pubkey local ID" \
-        security vpn set pubkey local-id client.example.com
+    assert_success "certs set local-id (FQDN)" \
+        "Staged: certs local ID" \
+        security vpn set certs local-id client.example.com
 
-    assert_success "pubkey set local-id (IP)" \
-        "Staged: pubkey local ID" \
-        security vpn set pubkey local-id 192.168.1.100
+    assert_success "certs set local-id (IP)" \
+        "Staged: certs local ID" \
+        security vpn set certs local-id 192.168.1.100
 
-    assert_success "pubkey set local-id (Email)" \
-        "Staged: pubkey local ID" \
-        security vpn set pubkey local-id admin@example.com
+    assert_success "certs set local-id (Email)" \
+        "Staged: certs local ID" \
+        security vpn set certs local-id admin@example.com
 
-    assert_success "pubkey set local-id (DN)" \
-        "Staged: pubkey local ID" \
-        security vpn set pubkey local-id "C=US, O=MyOrg, CN=client"
+    assert_success "certs set local-id (DN)" \
+        "Staged: certs local ID" \
+        security vpn set certs local-id "C=US, O=MyOrg, CN=client"
 
     # -- remote-id --
-    assert_success "pubkey set remote-id (FQDN)" \
-        "Staged: pubkey remote ID" \
-        security vpn set pubkey remote-id vpnserver.example.com
+    assert_success "certs set remote-id (FQDN)" \
+        "Staged: certs remote ID" \
+        security vpn set certs remote-id vpnserver.example.com
 
-    assert_success "pubkey set remote-id (IP)" \
-        "Staged: pubkey remote ID" \
-        security vpn set pubkey remote-id 10.0.0.1
+    assert_success "certs set remote-id (IP)" \
+        "Staged: certs remote ID" \
+        security vpn set certs remote-id 10.0.0.1
 
-    assert_success "pubkey set remote-id (Email)" \
-        "Staged: pubkey remote ID" \
-        security vpn set pubkey remote-id vpn@example.com
+    assert_success "certs set remote-id (Email)" \
+        "Staged: certs remote ID" \
+        security vpn set certs remote-id vpn@example.com
 
-    assert_success "pubkey set remote-id (DN)" \
-        "Staged: pubkey remote ID" \
-        security vpn set pubkey remote-id "C=US, O=MyOrg, CN=server"
+    assert_success "certs set remote-id (DN)" \
+        "Staged: certs remote ID" \
+        security vpn set certs remote-id "C=US, O=MyOrg, CN=server"
 
     # -- missing arg --
-    assert_error "pubkey set local-id (no arg)" \
+    assert_error "certs set local-id (no arg)" \
         "" \
-        security vpn set pubkey local-id
+        security vpn set certs local-id
 
-    assert_error "pubkey set remote-id (no arg)" \
+    assert_error "certs set remote-id (no arg)" \
         "" \
-        security vpn set pubkey remote-id
+        security vpn set certs remote-id
 }
 
 # ---------------------------------------------------------------------------
-# 2. Pubkey local-id / remote-id DEL commands (staging)
+# 2. Certs local-id / remote-id DEL commands (staging)
 # ---------------------------------------------------------------------------
-test_pubkey_del_identity() {
-    section "PUBKEY DEL IDENTITY (staging)"
+test_certs_del_identity() {
+    section "CERTS DEL IDENTITY (staging)"
 
     local local_id_cmds=(
         "security vpn set auth pubkey"
-        "security vpn set pubkey local-id client.example.com"
-        "security vpn set pubkey remote-id vpnserver.example.com"
-        "security vpn del pubkey local-id"
+        "security vpn set certs local-id client.example.com"
+        "security vpn set certs remote-id vpnserver.example.com"
+        "security vpn del certs local-id"
     )
     capture_scli_session "${local_id_cmds[@]}"
-    assert_captured_session_success "pubkey del local-id session"
+    assert_captured_session_success "certs del local-id session"
     if [ "$SCLI_SESSION_EXIT" -eq 0 ]; then
-        assert_text_contains "pubkey del local-id" \
-            "Clear pubkey local ID" \
+        assert_text_contains "certs del local-id" \
+            "Clear certs local ID" \
             "$SCLI_SESSION_OUTPUT"
     fi
 
     local remote_id_cmds=(
         "security vpn set auth pubkey"
-        "security vpn set pubkey local-id client.example.com"
-        "security vpn set pubkey remote-id vpnserver.example.com"
-        "security vpn del pubkey remote-id"
+        "security vpn set certs local-id client.example.com"
+        "security vpn set certs remote-id vpnserver.example.com"
+        "security vpn del certs remote-id"
     )
     capture_scli_session "${remote_id_cmds[@]}"
-    assert_captured_session_success "pubkey del remote-id session"
+    assert_captured_session_success "certs del remote-id session"
     if [ "$SCLI_SESSION_EXIT" -eq 0 ]; then
-        assert_text_contains "pubkey del remote-id" \
-            "Clear pubkey remote ID" \
+        assert_text_contains "certs del remote-id" \
+            "Clear certs remote ID" \
             "$SCLI_SESSION_OUTPUT"
     fi
 }
@@ -368,48 +375,48 @@ test_show_config_identity() {
 
     local show_cmds=(
         "security vpn set auth pubkey"
-        "security vpn set pubkey local-id client.example.com"
-        "security vpn set pubkey remote-id vpnserver.example.com"
+        "security vpn set certs local-id client.example.com"
+        "security vpn set certs remote-id vpnserver.example.com"
         "security vpn show config"
     )
     capture_scli_session "${show_cmds[@]}"
     assert_captured_session_success "show config identity session"
     if [ "$SCLI_SESSION_EXIT" -eq 0 ]; then
-        assert_text_contains "show config: pubkey Local Id displayed" \
+        assert_text_contains "show config: certs Local Id displayed" \
             "Local Id" \
             "$SCLI_SESSION_OUTPUT"
-        assert_text_contains "show config: pubkey Remote Id displayed" \
+        assert_text_contains "show config: certs Remote Id displayed" \
             "Remote Id" \
             "$SCLI_SESSION_OUTPUT"
     fi
 
     local clear_cmds=(
         "security vpn set auth pubkey"
-        "security vpn set pubkey local-id client.example.com"
-        "security vpn set pubkey remote-id vpnserver.example.com"
-        "security vpn del pubkey local-id"
-        "security vpn del pubkey remote-id"
+        "security vpn set certs local-id client.example.com"
+        "security vpn set certs remote-id vpnserver.example.com"
+        "security vpn del certs local-id"
+        "security vpn del certs remote-id"
         "security vpn show config"
     )
     capture_scli_session "${clear_cmds[@]}"
     assert_captured_session_success "show config cleared identity session"
     if [ "$SCLI_SESSION_EXIT" -eq 0 ]; then
-        assert_text_contains "show config: pubkey Local Id (not set)" \
+        assert_text_contains "show config: certs Local Id (not set)" \
             "(not set)" \
             "$SCLI_SESSION_OUTPUT"
     fi
 }
 
 # ---------------------------------------------------------------------------
-# 6. Auth mode switch clears pubkey-only IDs
+# 6. Auth mode switch clears cert (pubkey-auth) only IDs
 # ---------------------------------------------------------------------------
 test_auth_switch_clears_ids() {
     section "AUTH SWITCH ID SANITIZATION"
 
     local cmds=(
         "security vpn set auth pubkey"
-        "security vpn set pubkey local-id %fromcert"
-        "security vpn set pubkey remote-id %same"
+        "security vpn set certs local-id %fromcert"
+        "security vpn set certs remote-id %same"
         "security vpn set auth psk"
     )
     capture_scli_session "${cmds[@]}"
@@ -424,12 +431,12 @@ test_auth_switch_clears_ids() {
 # ---------------------------------------------------------------------------
 # 7. LIVE: Save + verify config files (--live only)
 # ---------------------------------------------------------------------------
-test_live_pubkey_save_fqdn() {
-    section "LIVE: PUBKEY SAVE — FQDN"
+test_live_certs_save_fqdn() {
+    section "LIVE: CERTS SAVE — FQDN"
 
     if ! $LIVE; then
-        skip_test "pubkey save FQDN local-id" "use --live"
-        skip_test "pubkey save FQDN remote-id" "use --live"
+        skip_test "certs save FQDN local-id" "use --live"
+        skip_test "certs save FQDN remote-id" "use --live"
         return
     fi
 
@@ -438,12 +445,12 @@ test_live_pubkey_save_fqdn() {
 
     local cmds=(
         "security vpn set auth pubkey"
-        "security vpn set pubkey local-id client.example.com"
-        "security vpn set pubkey remote-id vpnserver.example.com"
+        "security vpn set certs local-id client.example.com"
+        "security vpn set certs remote-id vpnserver.example.com"
         "security vpn save"
     )
     capture_scli_session "${cmds[@]}"
-    assert_captured_session_success "pubkey save FQDN session"
+    assert_captured_session_success "certs save FQDN session"
     if [ "$SCLI_SESSION_EXIT" -ne 0 ]; then
         return
     fi
@@ -461,12 +468,12 @@ test_live_pubkey_save_fqdn() {
     fi
 }
 
-test_live_pubkey_save_ip() {
-    section "LIVE: PUBKEY SAVE — IP"
+test_live_certs_save_ip() {
+    section "LIVE: CERTS SAVE — IP"
 
     if ! $LIVE; then
-        skip_test "pubkey save IP local-id" "use --live"
-        skip_test "pubkey save IP remote-id" "use --live"
+        skip_test "certs save IP local-id" "use --live"
+        skip_test "certs save IP remote-id" "use --live"
         return
     fi
 
@@ -475,12 +482,12 @@ test_live_pubkey_save_ip() {
 
     local cmds=(
         "security vpn set auth pubkey"
-        "security vpn set pubkey local-id 192.168.1.100"
-        "security vpn set pubkey remote-id 10.0.0.1"
+        "security vpn set certs local-id 192.168.1.100"
+        "security vpn set certs remote-id 10.0.0.1"
         "security vpn save"
     )
     capture_scli_session "${cmds[@]}"
-    assert_captured_session_success "pubkey save IP session"
+    assert_captured_session_success "certs save IP session"
     if [ "$SCLI_SESSION_EXIT" -ne 0 ]; then
         return
     fi
@@ -498,12 +505,12 @@ test_live_pubkey_save_ip() {
     fi
 }
 
-test_live_pubkey_save_email() {
-    section "LIVE: PUBKEY SAVE — Email"
+test_live_certs_save_email() {
+    section "LIVE: CERTS SAVE — Email"
 
     if ! $LIVE; then
-        skip_test "pubkey save Email local-id" "use --live"
-        skip_test "pubkey save Email remote-id" "use --live"
+        skip_test "certs save Email local-id" "use --live"
+        skip_test "certs save Email remote-id" "use --live"
         return
     fi
 
@@ -512,12 +519,12 @@ test_live_pubkey_save_email() {
 
     local cmds=(
         "security vpn set auth pubkey"
-        "security vpn set pubkey local-id admin@example.com"
-        "security vpn set pubkey remote-id vpn@example.com"
+        "security vpn set certs local-id admin@example.com"
+        "security vpn set certs remote-id vpn@example.com"
         "security vpn save"
     )
     capture_scli_session "${cmds[@]}"
-    assert_captured_session_success "pubkey save Email session"
+    assert_captured_session_success "certs save Email session"
     if [ "$SCLI_SESSION_EXIT" -ne 0 ]; then
         return
     fi
@@ -538,12 +545,12 @@ test_live_pubkey_save_email() {
     fi
 }
 
-test_live_pubkey_save_dn() {
-    section "LIVE: PUBKEY SAVE — DN (Distinguished Name)"
+test_live_certs_save_dn() {
+    section "LIVE: CERTS SAVE — DN (Distinguished Name)"
 
     if ! $LIVE; then
-        skip_test "pubkey save DN local-id" "use --live"
-        skip_test "pubkey save DN remote-id" "use --live"
+        skip_test "certs save DN local-id" "use --live"
+        skip_test "certs save DN remote-id" "use --live"
         return
     fi
 
@@ -552,12 +559,12 @@ test_live_pubkey_save_dn() {
 
     local cmds=(
         "security vpn set auth pubkey"
-        "security vpn set pubkey local-id \"C=US, O=MyOrg, CN=client\""
-        "security vpn set pubkey remote-id \"C=US, O=MyOrg, CN=server\""
+        "security vpn set certs local-id \"C=US, O=MyOrg, CN=client\""
+        "security vpn set certs remote-id \"C=US, O=MyOrg, CN=server\""
         "security vpn save"
     )
     capture_scli_session "${cmds[@]}"
-    assert_captured_session_success "pubkey save DN session"
+    assert_captured_session_success "certs save DN session"
     if [ "$SCLI_SESSION_EXIT" -ne 0 ]; then
         return
     fi
@@ -576,19 +583,19 @@ test_live_pubkey_save_dn() {
     fi
 }
 
-test_live_pubkey_save_reload() {
-    section "LIVE: PUBKEY SAVE + RELOAD (round-trip)"
+test_live_certs_save_reload() {
+    section "LIVE: CERTS SAVE + RELOAD (round-trip)"
 
     if ! $LIVE; then
-        skip_test "pubkey save+reload FQDN" "use --live"
-        skip_test "pubkey save+reload DN" "use --live"
+        skip_test "certs save+reload FQDN" "use --live"
+        skip_test "certs save+reload DN" "use --live"
         return
     fi
 
     local fqdn_cmds=(
         "security vpn set auth pubkey"
-        "security vpn set pubkey local-id client.example.com"
-        "security vpn set pubkey remote-id vpnserver.example.com"
+        "security vpn set certs local-id client.example.com"
+        "security vpn set certs remote-id vpnserver.example.com"
         "security vpn save"
     )
     capture_scli_session "${fqdn_cmds[@]}"
@@ -608,8 +615,8 @@ test_live_pubkey_save_reload() {
 
     local dn_cmds=(
         "security vpn set auth pubkey"
-        "security vpn set pubkey local-id \"C=US, O=MyOrg, CN=client\""
-        "security vpn set pubkey remote-id \"C=US, O=MyOrg, CN=server\""
+        "security vpn set certs local-id \"C=US, O=MyOrg, CN=client\""
+        "security vpn set certs remote-id \"C=US, O=MyOrg, CN=server\""
         "security vpn save"
     )
     capture_scli_session "${dn_cmds[@]}"
@@ -627,12 +634,12 @@ test_live_pubkey_save_reload() {
         security vpn show config
 }
 
-test_live_pubkey_del_save() {
-    section "LIVE: PUBKEY DEL + SAVE"
+test_live_certs_del_save() {
+    section "LIVE: CERTS DEL + SAVE"
 
     if ! $LIVE; then
-        skip_test "pubkey del local-id + save" "use --live"
-        skip_test "pubkey del remote-id + save" "use --live"
+        skip_test "certs del local-id + save" "use --live"
+        skip_test "certs del remote-id + save" "use --live"
         return
     fi
 
@@ -641,24 +648,24 @@ test_live_pubkey_del_save() {
 
     local save_cmds=(
         "security vpn set auth pubkey"
-        "security vpn set pubkey local-id client.example.com"
-        "security vpn set pubkey remote-id vpnserver.example.com"
+        "security vpn set certs local-id client.example.com"
+        "security vpn set certs remote-id vpnserver.example.com"
         "security vpn save"
     )
     capture_scli_session "${save_cmds[@]}"
-    assert_captured_session_success "pubkey del+save initial save session"
+    assert_captured_session_success "certs del+save initial save session"
     if [ "$SCLI_SESSION_EXIT" -ne 0 ]; then
         return
     fi
 
     local del_cmds=(
         "security vpn set auth pubkey"
-        "security vpn del pubkey local-id"
-        "security vpn del pubkey remote-id"
+        "security vpn del certs local-id"
+        "security vpn del certs remote-id"
         "security vpn save"
     )
     capture_scli_session "${del_cmds[@]}"
-    assert_captured_session_success "pubkey del+save delete session"
+    assert_captured_session_success "certs del+save delete session"
     if [ "$SCLI_SESSION_EXIT" -ne 0 ]; then
         return
     fi
@@ -682,11 +689,185 @@ test_live_pubkey_del_save() {
 }
 
 # =============================================================================
+# =============================================================================
+# REVOCATION TESTS
+# Cover the 'security vpn set revocation {ocsp-validation|ocsp-strict|
+# crl-strict|crl-check-interval}' subtree introduced on the
+# vpn-revocation branch.  ocsp-strict / crl-strict / crl-check-interval
+# are libreswan-only (strongswan should print a "not supported" notice).
+# =============================================================================
+
+# 7. ocsp-validation enable/disable (both engines)
+test_revocation_ocsp_validation() {
+    section "REVOCATION: OCSP VALIDATION (staging)"
+
+    assert_success "set revocation ocsp-validation enable" \
+        "OCSP validation: enabled" \
+        security vpn set revocation ocsp-validation enable
+
+    assert_success "set revocation ocsp-validation disable" \
+        "OCSP validation: disabled" \
+        security vpn set revocation ocsp-validation disable
+
+    # restore enabled
+    scli_run security vpn set revocation ocsp-validation enable >/dev/null 2>&1
+}
+
+# 8. ocsp-strict / crl-strict / crl-check-interval (libreswan only)
+test_revocation_libreswan_only() {
+    section "REVOCATION: LIBRESWAN-ONLY KNOBS (staging)"
+
+    local engine
+    engine=$(get_vpn_engine)
+
+    if [ "$engine" = "strongswan" ]; then
+        # On strongswan all three commands must print the not-supported notice
+        assert_output_contains "ocsp-strict refuses on strongswan" \
+            "not supported on strongswan" \
+            security vpn set revocation ocsp-strict enable
+
+        assert_output_contains "crl-strict refuses on strongswan" \
+            "not supported on strongswan" \
+            security vpn set revocation crl-strict enable
+
+        assert_output_contains "crl-check-interval refuses on strongswan" \
+            "not supported on strongswan" \
+            security vpn set revocation crl-check-interval 1800
+        return
+    fi
+
+    # libreswan path — full staging coverage
+    assert_success "set revocation ocsp-strict enable" \
+        "OCSP strict: enabled" \
+        security vpn set revocation ocsp-strict enable
+
+    assert_success "set revocation ocsp-strict disable" \
+        "OCSP strict: disabled" \
+        security vpn set revocation ocsp-strict disable
+
+    assert_success "set revocation crl-strict enable" \
+        "CRL strict: enabled" \
+        security vpn set revocation crl-strict enable
+
+    assert_success "set revocation crl-strict disable" \
+        "CRL strict: disabled" \
+        security vpn set revocation crl-strict disable
+
+    # crl-check-interval valid values
+    assert_success "set revocation crl-check-interval 60 (lower bound)" \
+        "CRL check interval: 60 s" \
+        security vpn set revocation crl-check-interval 60
+
+    assert_success "set revocation crl-check-interval 3600 (default)" \
+        "CRL check interval: 3600 s" \
+        security vpn set revocation crl-check-interval 3600
+
+    assert_success "set revocation crl-check-interval 86400 (upper bound)" \
+        "CRL check interval: 86400 s" \
+        security vpn set revocation crl-check-interval 86400
+
+    # crl-check-interval rejects out-of-range / non-numeric
+    assert_error "set revocation crl-check-interval 0 rejected" \
+        "60..86400" \
+        security vpn set revocation crl-check-interval 0
+
+    assert_error "set revocation crl-check-interval 59 rejected" \
+        "60..86400" \
+        security vpn set revocation crl-check-interval 59
+
+    assert_error "set revocation crl-check-interval 86401 rejected" \
+        "60..86400" \
+        security vpn set revocation crl-check-interval 86401
+
+    assert_error "set revocation crl-check-interval -1 rejected" \
+        "60..86400" \
+        security vpn set revocation crl-check-interval -1
+
+    assert_error "set revocation crl-check-interval abc rejected" \
+        "60..86400" \
+        security vpn set revocation crl-check-interval abc
+
+    # restore the strict defaults so subsequent tests start clean
+    scli_run security vpn set revocation ocsp-strict enable >/dev/null 2>&1
+    scli_run security vpn set revocation crl-strict enable >/dev/null 2>&1
+    scli_run security vpn set revocation crl-check-interval 3600 >/dev/null 2>&1
+}
+
+# 9. 'show config' contains a Revocation section, marking libreswan-only
+#    fields as "not supported on strongswan" when strongswan is active.
+test_show_config_revocation() {
+    section "REVOCATION: SHOW CONFIG SECTION"
+
+    local engine
+    engine=$(get_vpn_engine)
+
+    local out
+    out=$(scli_run security vpn show config 2>&1)
+
+    assert_text_contains "show config has Revocation section" \
+        "Revocation:" "$out"
+
+    assert_text_contains "show config lists OCSP Validation" \
+        "OCSP Validation" "$out"
+
+    if [ "$engine" = "strongswan" ]; then
+        assert_text_contains "OCSP Strict marked not supported on strongswan" \
+            "not supported on strongswan" "$out"
+    else
+        assert_text_contains "show config lists OCSP Strict" \
+            "OCSP Strict" "$out"
+        assert_text_contains "show config lists CRL Strict" \
+            "CRL Strict" "$out"
+        assert_text_contains "show config lists CRL Check Interval" \
+            "CRL Check Interval" "$out"
+    fi
+}
+
+# 10. live: revocation values land in /etc/ipsec.conf after save (libreswan only)
+test_live_revocation_save() {
+    section "REVOCATION: LIVE SAVE (libreswan only)"
+
+    if ! $LIVE; then
+        skip_test "revocation save -> /etc/ipsec.conf" "use --live"
+        return
+    fi
+
+    local engine
+    engine=$(get_vpn_engine)
+    if [ "$engine" != "libreswan" ]; then
+        skip_test "revocation save -> /etc/ipsec.conf" "libreswan only"
+        return
+    fi
+
+    capture_scli_session \
+        "security vpn set revocation ocsp-strict disable" \
+        "security vpn set revocation crl-strict disable" \
+        "security vpn set revocation crl-check-interval 1800" \
+        "security vpn save"
+    assert_captured_session_success "revocation set+save session"
+
+    assert_file_contains "ipsec.conf has ocsp-strict=no" \
+        "/etc/ipsec.conf" "ocsp-strict=no"
+    assert_file_contains "ipsec.conf has crl-strict=no" \
+        "/etc/ipsec.conf" "crl-strict=no"
+    assert_file_contains "ipsec.conf has crlcheckinterval=1800" \
+        "/etc/ipsec.conf" "crlcheckinterval=1800"
+
+    # restore strict defaults
+    capture_scli_session \
+        "security vpn set revocation ocsp-strict enable" \
+        "security vpn set revocation crl-strict enable" \
+        "security vpn set revocation crl-check-interval 3600" \
+        "security vpn save"
+    assert_captured_session_success "revocation restore strict defaults"
+}
+
+# =============================================================================
 # MAIN
 # =============================================================================
 main() {
     parse_common_args "$@"
-    print_header "VPN Identity"
+    print_header "VPN"
 
     if ! check_vpn_engine; then
         printf "${RED}ERROR: No VPN engine configured. Cannot run tests.${NC}\n"
@@ -697,21 +878,27 @@ main() {
     engine=$(get_vpn_engine)
     printf "${BOLD} Engine: %s${NC}\n\n" "$engine"
 
-    # Staging tests (always run)
-    test_pubkey_set_identity
-    test_pubkey_del_identity
+    # Identity (cert / PSK) — staging
+    test_certs_set_identity
+    test_certs_del_identity
     test_psk_set_identity
     test_psk_del_identity
     test_show_config_identity
     test_auth_switch_clears_ids
 
+    # Revocation — staging + show
+    test_revocation_ocsp_validation
+    test_revocation_libreswan_only
+    test_show_config_revocation
+
     # Live tests (save to disk, --live only)
-    test_live_pubkey_save_fqdn
-    test_live_pubkey_save_ip
-    test_live_pubkey_save_email
-    test_live_pubkey_save_dn
-    test_live_pubkey_save_reload
-    test_live_pubkey_del_save
+    test_live_certs_save_fqdn
+    test_live_certs_save_ip
+    test_live_certs_save_email
+    test_live_certs_save_dn
+    test_live_certs_save_reload
+    test_live_certs_del_save
+    test_live_revocation_save
 
     print_summary
 }

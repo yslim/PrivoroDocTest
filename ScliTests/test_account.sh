@@ -500,6 +500,184 @@ test_faillock_ssh() {
 }
 
 # ---------------------------------------------------------------------------
+# Recovery-admin branch tests
+# ---------------------------------------------------------------------------
+
+# Run a single SCLI command in a one-shot session as <user>.  Returns the
+# command output (stdout+stderr) on stdout.
+scli_run_as() {
+    local user="$1"
+    shift
+    if [ "$(id -u)" -eq 0 ]; then
+        printf '%s\nexit\n' "$*" | su - "$user" 2>&1
+    else
+        printf '%s\nexit\n' "$*" | sudo -n su - "$user" 2>&1
+    fi
+}
+
+# 'system account reset admin-passwd' was added on the recovery-admin
+# branch.  It is gated to the recovery account, prints a y/N confirm
+# prompt, generates a 16-char one-time password, and back-dates the
+# admin SCLI aging record so the next admin login forces a change.
+test_recovery_reset_admin_passwd_permission() {
+    section "RECOVERY: 'reset admin-passwd' permission"
+
+    local out
+    out=$(scli_run_as admin "system account reset admin-passwd")
+    if echo "$out" | grep -qiE "permission denied|requires .*recovery"; then
+        TOTAL=$((TOTAL + 1))
+        PASS=$((PASS + 1))
+        printf "  ${GREEN}PASS${NC}  admin denied access to 'reset admin-passwd'\n"
+    else
+        TOTAL=$((TOTAL + 1))
+        FAIL=$((FAIL + 1))
+        FAILURES+=("admin denied access to 'reset admin-passwd'")
+        printf "  ${RED}FAIL${NC}  admin denied access to 'reset admin-passwd'\n"
+        printf "        output: %s\n" "$out"
+    fi
+}
+
+# Recovery user runs 'reset admin-passwd' and answers 'no' to the y/N
+# prompt — the command must cancel without changing /etc/shadow.
+test_recovery_reset_admin_passwd_cancel() {
+    section "RECOVERY: 'reset admin-passwd' y/N cancel path"
+
+    if ! id recovery >/dev/null 2>&1; then
+        skip_test "reset admin-passwd cancel" "recovery account not present"
+        return
+    fi
+
+    local before_hash after_hash out
+    before_hash=$(sudo grep '^admin:' /etc/shadow | cut -d: -f2)
+
+    # Feed 'n' as the answer; SCLI shell wraps the command, so two
+    # writes are needed — the SCLI command, then the prompt answer.
+    if [ "$(id -u)" -eq 0 ]; then
+        out=$(printf 'system account reset admin-passwd\nn\nexit\n' | su - recovery 2>&1)
+    else
+        out=$(printf 'system account reset admin-passwd\nn\nexit\n' | sudo -n su - recovery 2>&1)
+    fi
+
+    after_hash=$(sudo grep '^admin:' /etc/shadow | cut -d: -f2)
+
+    assert_text_contains "y/N prompt cancels (output says Cancelled)" \
+        "Cancelled" "$out"
+
+    TOTAL=$((TOTAL + 1))
+    if [ "$before_hash" = "$after_hash" ]; then
+        PASS=$((PASS + 1))
+        printf "  ${GREEN}PASS${NC}  /etc/shadow admin hash unchanged after cancel\n"
+    else
+        FAIL=$((FAIL + 1))
+        FAILURES+=("/etc/shadow admin hash unchanged after cancel")
+        printf "  ${RED}FAIL${NC}  /etc/shadow admin hash unchanged after cancel\n"
+    fi
+}
+
+# 'exit' and 'date' got requiredLevel="all" so they survive recovery's
+# strict whitelist while still being visible to admin and normal user.
+test_basics_visible_for_all_levels() {
+    section "RECOVERY: exit/date accessible to all levels"
+
+    if ! id recovery >/dev/null 2>&1; then
+        skip_test "basics access for recovery" "recovery account not present"
+        return
+    fi
+
+    local out
+    out=$(scli_run_as recovery "date")
+    if echo "$out" | grep -qiE "permission denied|unknown command"; then
+        TOTAL=$((TOTAL + 1))
+        FAIL=$((FAIL + 1))
+        FAILURES+=("recovery can run 'date'")
+        printf "  ${RED}FAIL${NC}  recovery can run 'date'\n"
+        printf "        output: %s\n" "$out"
+    else
+        TOTAL=$((TOTAL + 1))
+        PASS=$((PASS + 1))
+        printf "  ${GREEN}PASS${NC}  recovery can run 'date'\n"
+    fi
+
+    # admin path (same command must still work)
+    out=$(scli_run_as admin "date")
+    if echo "$out" | grep -qiE "permission denied|unknown command"; then
+        TOTAL=$((TOTAL + 1))
+        FAIL=$((FAIL + 1))
+        FAILURES+=("admin can run 'date'")
+        printf "  ${RED}FAIL${NC}  admin can run 'date'\n"
+    else
+        TOTAL=$((TOTAL + 1))
+        PASS=$((PASS + 1))
+        printf "  ${GREEN}PASS${NC}  admin can run 'date'\n"
+    fi
+}
+
+# Recovery user must not see commands that change unrelated CLI
+# settings (NDcPP "NO privilege to change any other CLI Setting").
+test_recovery_strict_whitelist() {
+    section "RECOVERY: strict whitelist (denied commands)"
+
+    if ! id recovery >/dev/null 2>&1; then
+        skip_test "recovery whitelist" "recovery account not present"
+        return
+    fi
+
+    local cases=(
+        "system network show"
+        "security vpn show config"
+        "system audit show"
+        "basics reboot"
+    )
+    local cmd out
+    for cmd in "${cases[@]}"; do
+        out=$(scli_run_as recovery "$cmd")
+        TOTAL=$((TOTAL + 1))
+        if echo "$out" | grep -qiE "permission denied|unknown command|requires .*admin"; then
+            PASS=$((PASS + 1))
+            printf "  ${GREEN}PASS${NC}  recovery denied: %s\n" "$cmd"
+        else
+            FAIL=$((FAIL + 1))
+            FAILURES+=("recovery denied: $cmd")
+            printf "  ${RED}FAIL${NC}  recovery denied: %s\n" "$cmd"
+            printf "        output: %s\n" "$out"
+        fi
+    done
+}
+
+# Recovery user can run the admin-recovery actions that the branch
+# explicitly enables: show admin status, set admin policy, set admin
+# unlock, set recovery passwd (own).
+test_recovery_allowed_admin_recovery_actions() {
+    section "RECOVERY: allowed admin-recovery actions"
+
+    if ! id recovery >/dev/null 2>&1; then
+        skip_test "recovery allowed actions" "recovery account not present"
+        return
+    fi
+
+    local cmds=(
+        "system account show admin status"
+        "system account show admin policy"
+        "system account show recovery status"
+        "system account set admin unlock"
+    )
+    local cmd out
+    for cmd in "${cmds[@]}"; do
+        out=$(scli_run_as recovery "$cmd")
+        TOTAL=$((TOTAL + 1))
+        if echo "$out" | grep -qiE "permission denied|unknown command"; then
+            FAIL=$((FAIL + 1))
+            FAILURES+=("recovery allowed: $cmd")
+            printf "  ${RED}FAIL${NC}  recovery allowed: %s\n" "$cmd"
+            printf "        output: %s\n" "$out"
+        else
+            PASS=$((PASS + 1))
+            printf "  ${GREEN}PASS${NC}  recovery allowed: %s\n" "$cmd"
+        fi
+    done
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -525,6 +703,13 @@ main() {
     test_password_complexity
     test_consecutive_chars
     test_keyboard_patterns
+
+    # Recovery-admin branch features
+    test_recovery_reset_admin_passwd_permission
+    test_recovery_reset_admin_passwd_cancel
+    test_basics_visible_for_all_levels
+    test_recovery_strict_whitelist
+    test_recovery_allowed_admin_recovery_actions
 
     # SSH faillock tests (only when --live is passed)
     if $LIVE; then

@@ -365,13 +365,13 @@ test_account_unlock() {
     # Admin unlock
     assert_success \
         "Admin account unlock" \
-        "reset" \
+        "admin account unlocked" \
         system account set admin unlock
 
     # User unlock
     assert_success \
         "User account unlock" \
-        "reset" \
+        "user account unlocked" \
         system account set user unlock
 }
 
@@ -555,14 +555,18 @@ scli_run_as() {
 test_recovery_reset_admin_passwd_permission() {
     section "RECOVERY: 'reset admin-passwd' permission"
 
+    # 'reset' is gated to recovery only.  For admin the subcommand is
+    # pruned from the visible tree, so cobra falls back to the parent
+    # help dump (Available Commands: set / show — no 'reset').  Either
+    # outcome counts as denial.
     local out
     out=$(scli_run_as admin "system account reset admin-passwd")
-    if echo "$out" | grep -qiE "permission denied|requires .*recovery"; then
-        TOTAL=$((TOTAL + 1))
+    TOTAL=$((TOTAL + 1))
+    if echo "$out" | grep -qiE "permission denied|requires .*recovery|Available Commands:" \
+       && ! echo "$out" | grep -qE "^[[:space:]]*reset[[:space:]]"; then
         PASS=$((PASS + 1))
         printf "  ${GREEN}PASS${NC}  admin denied access to 'reset admin-passwd'\n"
     else
-        TOTAL=$((TOTAL + 1))
         FAIL=$((FAIL + 1))
         FAILURES+=("admin denied access to 'reset admin-passwd'")
         printf "  ${RED}FAIL${NC}  admin denied access to 'reset admin-passwd'\n"
@@ -647,8 +651,15 @@ test_basics_visible_for_all_levels() {
 
 # Recovery user must not see / run commands that change unrelated CLI
 # settings (NDcPP "NO privilege to change any other CLI Setting").
-# Each case below should be rejected with a 'requires admin'
-# permission denied or 'unknown command' (after pruning).
+# Two denial shapes are accepted:
+#   - HARD denial: explicit message ("Permission denied", "unknown
+#     command", "requires admin") for cases where the parent itself
+#     is gated (security tree).
+#   - SOFT denial: when the parent is visible (e.g. system, network
+#     interface) but the requested child is pruned, cobra falls
+#     through to the parent's help dump.  The "Available Commands:"
+#     header is the unambiguous signal that the command was rejected
+#     rather than executed.
 test_recovery_strict_whitelist() {
     section "RECOVERY: strict whitelist (denied commands)"
 
@@ -681,7 +692,7 @@ test_recovery_strict_whitelist() {
     for cmd in "${cases[@]}"; do
         out=$(scli_run_as recovery "$cmd")
         TOTAL=$((TOTAL + 1))
-        if echo "$out" | grep -qiE "permission denied|unknown command|requires .*admin"; then
+        if echo "$out" | grep -qiE "permission denied|unknown command|requires .*admin|Available Commands:"; then
             PASS=$((PASS + 1))
             printf "  ${GREEN}PASS${NC}  recovery denied: %s\n" "$cmd"
         else

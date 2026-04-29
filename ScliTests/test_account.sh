@@ -612,8 +612,10 @@ test_basics_visible_for_all_levels() {
     fi
 }
 
-# Recovery user must not see commands that change unrelated CLI
+# Recovery user must not see / run commands that change unrelated CLI
 # settings (NDcPP "NO privilege to change any other CLI Setting").
+# Each case below should be rejected with a 'requires admin'
+# permission denied or 'unknown command' (after pruning).
 test_recovery_strict_whitelist() {
     section "RECOVERY: strict whitelist (denied commands)"
 
@@ -623,9 +625,23 @@ test_recovery_strict_whitelist() {
     fi
 
     local cases=(
-        "system network show"
+        # security tree — entire subtree gated as admin
         "security vpn show config"
-        "system audit show"
+        "security vpn set engine libreswan"
+        # system children (audit / ntp / banner / etc.) — admin-only
+        "system audit show status"
+        "system ntp show config"
+        "system banner show status"
+        "system update show config"
+        "system remote-access show status"
+        "system session show status"
+        "system serial-console show status"
+        "system auto-logout show status"
+        "system syslog-server show status"
+        "system log show auth"
+        # network state-modifying — admin-only
+        "network interface create dummy0"
+        # basics — destructive
         "basics reboot"
     )
     local cmd out
@@ -642,6 +658,77 @@ test_recovery_strict_whitelist() {
             printf "        output: %s\n" "$out"
         fi
     done
+}
+
+# Recovery's 'system' menu must list only 'account'; siblings (audit /
+# ntp / banner / ...) carry admin annotations and disappear from the
+# pruned tree.  We grep the 'help'-style listing produced by running
+# the bare 'system' command.
+test_recovery_system_subtree_visibility() {
+    section "RECOVERY: 'system' subtree shows only 'account'"
+
+    if ! id recovery >/dev/null 2>&1; then
+        skip_test "recovery system subtree" "recovery account not present"
+        return
+    fi
+
+    local out
+    out=$(scli_run_as recovery "system")
+
+    assert_text_contains "recovery sees 'system account'" \
+        "account" "$out"
+
+    # Every sibling under 'system' should be pruned for recovery.
+    local siblings=(audit auto-logout banner log ntp remote-access \
+                    serial-console session syslog-server update)
+    local sib
+    for sib in "${siblings[@]}"; do
+        TOTAL=$((TOTAL + 1))
+        if echo "$out" | grep -qE "^[[:space:]]*${sib}\b"; then
+            FAIL=$((FAIL + 1))
+            FAILURES+=("recovery system pruned: $sib")
+            printf "  ${RED}FAIL${NC}  recovery should NOT see 'system %s'\n" "$sib"
+        else
+            PASS=$((PASS + 1))
+            printf "  ${GREEN}PASS${NC}  recovery does not see 'system %s'\n" "$sib"
+        fi
+    done
+}
+
+# 'security' subtree is admin-only; recovery's top-level menu and
+# direct invocation should both deny access.
+test_recovery_security_denied() {
+    section "RECOVERY: 'security' subtree denied entirely"
+
+    if ! id recovery >/dev/null 2>&1; then
+        skip_test "recovery security denied" "recovery account not present"
+        return
+    fi
+
+    local top
+    top=$(scli_run_as recovery "")
+    TOTAL=$((TOTAL + 1))
+    if echo "$top" | grep -qE "^[[:space:]]*security\b"; then
+        FAIL=$((FAIL + 1))
+        FAILURES+=("recovery top menu hides 'security'")
+        printf "  ${RED}FAIL${NC}  recovery top menu should NOT list 'security'\n"
+    else
+        PASS=$((PASS + 1))
+        printf "  ${GREEN}PASS${NC}  recovery top menu does not list 'security'\n"
+    fi
+
+    local out
+    out=$(scli_run_as recovery "security vpn show config")
+    TOTAL=$((TOTAL + 1))
+    if echo "$out" | grep -qiE "permission denied|unknown command|requires .*admin"; then
+        PASS=$((PASS + 1))
+        printf "  ${GREEN}PASS${NC}  recovery cannot run 'security vpn show config'\n"
+    else
+        FAIL=$((FAIL + 1))
+        FAILURES+=("recovery cannot run security vpn show config")
+        printf "  ${RED}FAIL${NC}  recovery should be denied: 'security vpn show config'\n"
+        printf "        output: %s\n" "$out"
+    fi
 }
 
 # Recovery user can run the admin-recovery actions that the branch
@@ -709,6 +796,8 @@ main() {
     test_recovery_reset_admin_passwd_cancel
     test_basics_visible_for_all_levels
     test_recovery_strict_whitelist
+    test_recovery_system_subtree_visibility
+    test_recovery_security_denied
     test_recovery_allowed_admin_recovery_actions
 
     # SSH faillock tests (only when --live is passed)

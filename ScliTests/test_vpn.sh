@@ -721,17 +721,20 @@ test_revocation_libreswan_only() {
     engine=$(get_vpn_engine)
 
     if [ "$engine" = "strongswan" ]; then
-        # On strongswan all three commands must print the not-supported notice
+        # On strongswan all three commands must print the not-supported notice.
+        # The SET path emits a capital-N "Not supported on strongswan; ..."
+        # message (set-conf.go); the SHOW path uses "(not supported on
+        # strongswan)" — a separate test_show_config_revocation matches that.
         assert_output_contains "ocsp-strict refuses on strongswan" \
-            "not supported on strongswan" \
+            "Not supported on strongswan" \
             security vpn set revocation ocsp-strict enable
 
         assert_output_contains "crl-strict refuses on strongswan" \
-            "not supported on strongswan" \
+            "Not supported on strongswan" \
             security vpn set revocation crl-strict enable
 
         assert_output_contains "crl-check-interval refuses on strongswan" \
-            "not supported on strongswan" \
+            "Not supported on strongswan" \
             security vpn set revocation crl-check-interval 1800
         return
     fi

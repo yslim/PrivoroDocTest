@@ -66,121 +66,121 @@ restore_config() {
 # ---------------------------------------------------------------------------
 
 test_password_min_length() {
-    section "PASSWORD MIN LENGTH"
+    section "PASSWORD MIN LENGTH (admin policy)"
 
     # Set to 20
     assert_success \
-        "Set password-min-length to 20" \
-        "Minimum password length set to 20" \
-        system account set password-min-length 20
+        "Set admin password-min-length to 20" \
+        "[admin] password-min-length = 20 characters" \
+        system account set admin policy password-min-length 20
 
     # Verify in show policy
     assert_output_contains \
-        "Show policy reflects min length 20" \
-        "Password min length: 20" \
-        system account show policy
+        "Show admin policy reflects min length 20" \
+        "password-min-length: 20 characters" \
+        system account show admin policy
 
     # Reject value below 15
     assert_error \
         "Reject password-min-length below 15" \
-        "at least 15" \
-        system account set password-min-length 10
+        "must be >= 15" \
+        system account set admin policy password-min-length 10
 
     # Reject non-integer
     assert_error \
         "Reject password-min-length non-integer" \
-        "at least 15" \
-        system account set password-min-length abc
+        "must be an integer" \
+        system account set admin policy password-min-length abc
 
     # Restore to default
     assert_success \
-        "Restore password-min-length to 15" \
-        "Minimum password length set to 15" \
-        system account set password-min-length 15
+        "Restore admin password-min-length to 15" \
+        "[admin] password-min-length = 15 characters" \
+        system account set admin policy password-min-length 15
 }
 
 test_password_max_age() {
-    section "PASSWORD MAX AGE"
+    section "PASSWORD MAX AGE (admin policy)"
 
     # Set to 60 days
     assert_success \
-        "Set password-max-age to 60 days" \
-        "Password max age set to 60" \
-        system account set password-max-age 60
+        "Set admin password-max-age to 60 days" \
+        "[admin] password-max-age = 60 day(s)" \
+        system account set admin policy password-max-age 60
 
     # Verify in show policy
     assert_output_contains \
-        "Show policy reflects max age 60" \
-        "Password max age: 60 day(s)" \
-        system account show policy
+        "Show admin policy reflects max age 60" \
+        "password-max-age:" \
+        system account show admin policy
 
     # Disable (set to 0)
     assert_success \
-        "Disable password expiry (max-age 0)" \
-        "Password expiry disabled" \
-        system account set password-max-age 0
+        "Disable admin password expiry (max-age 0)" \
+        "[admin] password-max-age = disabled" \
+        system account set admin policy password-max-age 0
 
     # Verify disabled in show policy
     assert_output_contains \
-        "Show policy reflects max age disabled" \
-        "Password max age: disabled" \
-        system account show policy
+        "Show admin policy reflects max age disabled" \
+        "disabled" \
+        system account show admin policy
 
     # Reject negative
     assert_error \
         "Reject negative password-max-age" \
-        "non-negative integer" \
-        system account set password-max-age -1
+        "must be >= 0" \
+        system account set admin policy password-max-age -1
 
     # Restore to default
     assert_success \
-        "Restore password-max-age to 90" \
-        "Password max age set to 90" \
-        system account set password-max-age 90
+        "Restore admin password-max-age to 90" \
+        "[admin] password-max-age = 90 day(s)" \
+        system account set admin policy password-max-age 90
 }
 
 test_password_warn_days() {
-    section "PASSWORD WARN DAYS"
+    section "PASSWORD WARN DAYS (admin policy)"
 
     # Set to 14
     assert_success \
-        "Set password-warn-days to 14" \
-        "Password warning period set to 14" \
-        system account set password-warn-days 14
+        "Set admin password-warn-days to 14" \
+        "[admin] password-warn-days = 14 day(s)" \
+        system account set admin policy password-warn-days 14
 
-    # Verify in show policy
+    # Verify in show policy (note: 2-space separator due to %-20s padding)
     assert_output_contains \
-        "Show policy reflects warn days 14" \
-        "Password warn days: 14" \
-        system account show policy
+        "Show admin policy reflects warn days 14" \
+        "password-warn-days:  14 day(s)" \
+        system account show admin policy
 
     # Reject negative
     assert_error \
         "Reject negative password-warn-days" \
-        "non-negative integer" \
-        system account set password-warn-days -1
+        "must be >= 0" \
+        system account set admin policy password-warn-days -1
 
     # Restore to default
     assert_success \
-        "Restore password-warn-days to 7" \
-        "Password warning period set to 7" \
-        system account set password-warn-days 7
+        "Restore admin password-warn-days to 7" \
+        "[admin] password-warn-days = 7 day(s)" \
+        system account set admin policy password-warn-days 7
 }
 
 test_login_max_attempts() {
-    section "LOGIN MAX ATTEMPTS"
+    section "LOGIN MAX ATTEMPTS (admin policy)"
 
     # Set to 5
     assert_success \
-        "Set login-max-attempts to 5" \
-        "Login max attempts set to 5" \
-        system account set login-max-attempts 5
+        "Set admin login-max-attempts to 5" \
+        "[admin] login-max-attempts = 5" \
+        system account set admin policy login-max-attempts 5
 
-    # Verify in show policy
+    # Verify in show policy (note: 2-space separator due to %-20s padding)
     assert_output_contains \
-        "Show policy reflects max attempts 5" \
-        "Login max attempts: 5" \
-        system account show policy
+        "Show admin policy reflects max attempts 5" \
+        "login-max-attempts:  5" \
+        system account show admin policy
 
     # Verify PAM file updated
     assert_file_contains \
@@ -188,23 +188,29 @@ test_login_max_attempts() {
         "$PAM_AUTH_FILE" \
         "deny=5"
 
-    # Reject zero
+    # Reject zero (range is 1..10)
     assert_error \
         "Reject login-max-attempts 0" \
-        "positive integer" \
-        system account set login-max-attempts 0
+        "must be in [1..10]" \
+        system account set admin policy login-max-attempts 0
 
     # Reject negative
     assert_error \
         "Reject login-max-attempts negative" \
-        "positive integer" \
-        system account set login-max-attempts -1
+        "must be in [1..10]" \
+        system account set admin policy login-max-attempts -1
+
+    # Reject above upper bound
+    assert_error \
+        "Reject login-max-attempts above 10" \
+        "must be in [1..10]" \
+        system account set admin policy login-max-attempts 11
 
     # Restore to default
     assert_success \
-        "Restore login-max-attempts to 3" \
-        "Login max attempts set to 3" \
-        system account set login-max-attempts 3
+        "Restore admin login-max-attempts to 3" \
+        "[admin] login-max-attempts = 3" \
+        system account set admin policy login-max-attempts 3
 
     # Verify PAM file restored
     assert_file_contains \
@@ -214,19 +220,19 @@ test_login_max_attempts() {
 }
 
 test_login_lockout_time() {
-    section "LOGIN LOCKOUT TIME"
+    section "LOGIN LOCKOUT TIME (admin policy)"
 
-    # Set to 300 seconds
+    # Set to 300 seconds (lower bound)
     assert_success \
-        "Set login-lockout-time to 300" \
-        "Login lockout time set to 300" \
-        system account set login-lockout-time 300
+        "Set admin login-lockout-time to 300" \
+        "[admin] login-lockout-time = 300 second(s)" \
+        system account set admin policy login-lockout-time 300
 
-    # Verify in show policy
+    # Verify in show policy (note: 2-space separator due to %-20s padding)
     assert_output_contains \
-        "Show policy reflects lockout time 300" \
-        "Login lockout time: 300 second(s)" \
-        system account show policy
+        "Show admin policy reflects lockout time 300" \
+        "login-lockout-time:  300 second(s)" \
+        system account show admin policy
 
     # Verify PAM file updated
     assert_file_contains \
@@ -234,29 +240,29 @@ test_login_lockout_time() {
         "$PAM_AUTH_FILE" \
         "unlock_time=300"
 
-    # Set to permanent (0)
-    assert_success \
-        "Set login-lockout-time to permanent (0)" \
-        "permanent" \
-        system account set login-lockout-time 0
+    # Reject 0 — new policy requires range 300..7200 (no "permanent" option)
+    assert_error \
+        "Reject login-lockout-time 0 (out of range)" \
+        "must be in [300..7200]" \
+        system account set admin policy login-lockout-time 0
 
-    # Verify permanent in show policy
-    assert_output_contains \
-        "Show policy reflects permanent lockout" \
-        "permanent" \
-        system account show policy
+    # Reject just below lower bound
+    assert_error \
+        "Reject login-lockout-time 299" \
+        "must be in [300..7200]" \
+        system account set admin policy login-lockout-time 299
 
-    # Verify PAM file updated
-    assert_file_contains \
-        "PAM common-auth updated with unlock_time=0" \
-        "$PAM_AUTH_FILE" \
-        "unlock_time=0"
+    # Reject above upper bound
+    assert_error \
+        "Reject login-lockout-time 7201" \
+        "must be in [300..7200]" \
+        system account set admin policy login-lockout-time 7201
 
     # Restore to default
     assert_success \
-        "Restore login-lockout-time to 600" \
-        "Login lockout time set to 600" \
-        system account set login-lockout-time 600
+        "Restore admin login-lockout-time to 600" \
+        "[admin] login-lockout-time = 600 second(s)" \
+        system account set admin policy login-lockout-time 600
 
     # Verify PAM file restored
     assert_file_contains \
@@ -266,63 +272,90 @@ test_login_lockout_time() {
 }
 
 test_show_policy() {
-    section "SHOW POLICY"
+    section "SHOW POLICY (per-account)"
 
-    # Verify all 5 fields are present
+    # show admin policy contains the account header + all 5 fields
     assert_output_contains \
-        "Show policy contains password min length" \
-        "Password min length:" \
-        system account show policy
-
-    assert_output_contains \
-        "Show policy contains password max age" \
-        "Password max age:" \
-        system account show policy
+        "Show admin policy lists Account header" \
+        "Account: admin" \
+        system account show admin policy
 
     assert_output_contains \
-        "Show policy contains password warn days" \
-        "Password warn days:" \
-        system account show policy
+        "Show admin policy contains password-min-length" \
+        "password-min-length:" \
+        system account show admin policy
 
     assert_output_contains \
-        "Show policy contains login max attempts" \
-        "Login max attempts:" \
-        system account show policy
+        "Show admin policy contains password-max-age" \
+        "password-max-age:" \
+        system account show admin policy
 
     assert_output_contains \
-        "Show policy contains login lockout time" \
-        "Login lockout time:" \
-        system account show policy
+        "Show admin policy contains password-warn-days" \
+        "password-warn-days:" \
+        system account show admin policy
+
+    assert_output_contains \
+        "Show admin policy contains login-max-attempts" \
+        "login-max-attempts:" \
+        system account show admin policy
+
+    assert_output_contains \
+        "Show admin policy contains login-lockout-time" \
+        "login-lockout-time:" \
+        system account show admin policy
+
+    # Verify the same tree exists for recovery and user accounts.
+    assert_output_contains \
+        "Show recovery policy lists Account header" \
+        "Account: recovery" \
+        system account show recovery policy
+
+    assert_output_contains \
+        "Show user policy lists Account header" \
+        "Account: user" \
+        system account show user policy
 }
 
 test_show_status() {
-    section "SHOW STATUS"
+    section "SHOW STATUS (per-account)"
 
-    # Admin status
+    # Admin status — lowercase 'admin account: <state>' line
     assert_output_contains \
         "Show admin status contains account info" \
-        "Admin account" \
+        "admin account:" \
         system account show admin status
 
-    # Admin password expiry info
+    # Capture once and verify the three blocks (account / aging / faillock).
     local output
     output=$(scli_run system account show admin status)
-    if echo "$output" | grep -qF "Password expiry:"; then
-        TOTAL=$((TOTAL + 1))
+
+    assert_text_contains "Show admin status contains password expiry info" \
+        "Password expiry:" "$output"
+
+    # New faillock line — output starts with either "Login failures:"
+    # (not locked) or "Login lockout:" (locked).
+    TOTAL=$((TOTAL + 1))
+    if echo "$output" | grep -qE "^Login (failures|lockout):"; then
         PASS=$((PASS + 1))
-        printf "  ${GREEN}PASS${NC}  Show admin status contains password expiry info\n"
+        printf "  ${GREEN}PASS${NC}  Show admin status contains faillock line\n"
     else
-        TOTAL=$((TOTAL + 1))
         FAIL=$((FAIL + 1))
-        FAILURES+=("Show admin status contains password expiry info")
-        printf "  ${RED}FAIL${NC}  Show admin status contains password expiry info\n"
+        FAILURES+=("Show admin status contains faillock line")
+        printf "  ${RED}FAIL${NC}  Show admin status contains faillock line\n"
         printf "        output: %s\n" "$output"
     fi
+
+    # Recovery status — same shape
+    assert_output_contains \
+        "Show recovery status contains account info" \
+        "recovery account:" \
+        system account show recovery status
 
     # User status
     assert_output_contains \
         "Show user status contains account info" \
-        "account" \
+        "user account:" \
         system account show user status
 }
 
@@ -449,9 +482,9 @@ test_faillock_ssh() {
     # First, reset any existing lockout
     sudo faillock --user "$SSH_USER" --reset 2>/dev/null
 
-    # Get current deny count from config
+    # Get current deny count from config (per-account: matches ssh user's policy)
     local deny_count
-    deny_count=$(scli_run system account show policy | grep "Login max attempts:" | grep -o '[0-9]*')
+    deny_count=$(scli_run system account show "$SSH_USER" policy | grep "login-max-attempts:" | grep -o '[0-9]\+' | head -1)
     if [ -z "$deny_count" ]; then
         deny_count=3
     fi

@@ -796,8 +796,9 @@ test_revocation_libreswan_only() {
     scli_run security vpn set revocation crl-check-interval 3600 >/dev/null 2>&1
 }
 
-# 9. 'show config' contains a Revocation section, marking libreswan-only
-#    fields as "not supported on strongswan" when strongswan is active.
+# 9. 'show config' has a Revocation section.  On libreswan the 3
+#    strict / interval knobs are listed; on strongswan they are
+#    omitted entirely (strongswan has no equivalent).
 test_show_config_revocation() {
     section "REVOCATION: SHOW CONFIG SECTION"
 
@@ -814,8 +815,20 @@ test_show_config_revocation() {
         "OCSP Validation" "$out"
 
     if [ "$engine" = "strongswan" ]; then
-        assert_text_contains "OCSP Strict marked not supported on strongswan" \
-            "not supported on strongswan" "$out"
+        # The 3 libreswan-only fields must NOT appear in show output.
+        local label
+        for label in "OCSP Strict" "CRL Strict" "CRL Check Interval"; do
+            TOTAL=$((TOTAL + 1))
+            if printf '%s\n' "$out" | grep -qF -- "$label"; then
+                FAIL=$((FAIL + 1))
+                FAILURES+=("strongswan show hides '$label'")
+                printf "  ${RED}FAIL${NC}  strongswan show hides '%s'\n" "$label"
+                printf "        output:\n%s\n" "$out"
+            else
+                PASS=$((PASS + 1))
+                printf "  ${GREEN}PASS${NC}  strongswan show hides '%s'\n" "$label"
+            fi
+        done
     else
         assert_text_contains "show config lists OCSP Strict" \
             "OCSP Strict" "$out"

@@ -279,14 +279,10 @@ test_vpn_set_commands() {
     fi
 
     # --- PSK ---
-    assert_success "vpn set psk local-id" \
-        "Staged:" \
-        security vpn set psk local-id test-local-id
-
-    assert_success "vpn set psk remote-id" \
-        "Staged:" \
-        security vpn set psk remote-id test-remote-id
-
+    # PSK local-id / remote-id are covered (with FQDN/IP/Email
+    # variants and exact "Staged: PSK ... ID" assertion) by
+    # test_vpn.sh::test_psk_set_identity — only PSK secret is tested
+    # here.
     assert_success "vpn set psk secret" \
         "Staged:" \
         security vpn set psk secret test-secret-12345
@@ -419,14 +415,11 @@ test_vpn_set_commands() {
         "Invalid address" \
         security vpn set vti source-ip not-an-ip
 
-    # --- OCSP ---
-    assert_success "vpn set ocsp-validation enable" \
-        "Staged:" \
-        security vpn set ocsp-validation enable
-
-    assert_success "vpn set ocsp-validation disable" \
-        "Staged:" \
-        security vpn set ocsp-validation disable
+    # --- OCSP / CRL ---
+    # 'security vpn set revocation {ocsp-validation,ocsp-strict,
+    # crl-strict,crl-check-interval}' is covered end-to-end (incl.
+    # the strongswan / libreswan engine-specific paths) by
+    # test_vpn.sh::test_revocation_*.
 }
 
 # ---------------------------------------------------------------------------

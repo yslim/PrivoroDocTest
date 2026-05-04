@@ -32,6 +32,15 @@ source "$(dirname "$0")/common.sh"
 # ---------------------------------------------------------------------------
 TEST_IFACE="${TEST_IFACE:-eth0}"
 
+# Where the live tests write persistent configuration.  Both are
+# captured by backup_network_state and restored on EXIT so a --live
+# run does not permanently mutate the device.
+NET_CONFIG_DIR="/etc/systemd/network"
+SCLI_CONFIG_FILE="/etc/scli.yml"
+NET_BACKUP_TGZ="/tmp/scli-test-network-backup.$$.tgz"
+SCLI_BACKUP_FILE="/tmp/scli-test-scli-yml-backup.$$.yml"
+NET_BACKUP_DONE=false
+
 # Detect a valid test interface (fallback if eth0 doesn't exist)
 detect_test_interface() {
     if sudo ip link show "$TEST_IFACE" &>/dev/null 2>&1; then
@@ -43,6 +52,54 @@ detect_test_interface() {
     if [ -n "$iface" ]; then
         TEST_IFACE="$iface"
     fi
+}
+
+# ---------------------------------------------------------------------------
+# Backup / restore (live mode only)
+#
+# The --live tests write systemd-networkd drop-ins under
+# /etc/systemd/network and may also persist staged state into
+# /etc/scli.yml.  We snapshot both before any mutating test runs
+# and restore them on script exit (success, failure, or interrupt)
+# so the device's network configuration is preserved.
+# ---------------------------------------------------------------------------
+backup_network_state() {
+    sudo tar -C / -czf "$NET_BACKUP_TGZ" "${NET_CONFIG_DIR#/}" 2>/dev/null \
+        || { printf "  ${RED}WARN${NC}  backup of %s failed\n" "$NET_CONFIG_DIR"; return 1; }
+    if [ -f "$SCLI_CONFIG_FILE" ]; then
+        sudo cp "$SCLI_CONFIG_FILE" "$SCLI_BACKUP_FILE" 2>/dev/null \
+            || printf "  ${RED}WARN${NC}  backup of %s failed\n" "$SCLI_CONFIG_FILE"
+    fi
+    NET_BACKUP_DONE=true
+    printf "  ${CYAN}INFO${NC}  network config backed up to %s\n" "$NET_BACKUP_TGZ"
+}
+
+restore_network_state() {
+    [ "$NET_BACKUP_DONE" = true ] || return 0
+    [ -f "$NET_BACKUP_TGZ" ] || return 0
+
+    printf "\n  ${CYAN}INFO${NC}  restoring network config from backup...\n"
+
+    # Wipe current systemd-networkd state and untar backup back into
+    # place.  --no-overwrite-dir lets tar replace existing files
+    # without choking on directory ownership.
+    sudo rm -rf "$NET_CONFIG_DIR"
+    sudo mkdir -p "$NET_CONFIG_DIR"
+    sudo tar -C / -xzf "$NET_BACKUP_TGZ" 2>/dev/null \
+        || printf "  ${RED}WARN${NC}  restore of %s failed\n" "$NET_CONFIG_DIR"
+
+    if [ -f "$SCLI_BACKUP_FILE" ]; then
+        sudo cp "$SCLI_BACKUP_FILE" "$SCLI_CONFIG_FILE" 2>/dev/null \
+            && sudo chown root:root "$SCLI_CONFIG_FILE" \
+            && sudo chmod 0644 "$SCLI_CONFIG_FILE"
+    fi
+
+    # Reload systemd-networkd so the restored drop-ins take effect.
+    sudo systemctl restart systemd-networkd 2>/dev/null \
+        || printf "  ${RED}WARN${NC}  systemd-networkd restart failed\n"
+
+    rm -f "$NET_BACKUP_TGZ" "$SCLI_BACKUP_FILE"
+    printf "  ${CYAN}INFO${NC}  network config restored\n"
 }
 
 # =============================================================================
@@ -936,8 +993,12 @@ main() {
     test_route_with_source
     test_route_validation
 
-    # Live save tests (only when --live is passed)
+    # Live save tests (only when --live is passed).  Snapshot the
+    # current network config first and arm an EXIT trap so the
+    # original state is restored even if a test aborts mid-run.
     if $LIVE; then
+        backup_network_state
+        trap 'restore_network_state' EXIT INT TERM
         test_live_interface_set_save
         test_live_lan_config_set_save
         test_live_route_save

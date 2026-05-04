@@ -782,9 +782,12 @@ test_revocation_libreswan_only() {
         "60..86400" \
         security vpn set revocation crl-check-interval 86401
 
+    # '--' stops cobra's flag parsing so '-1' is taken as the
+    # positional value and reaches the range validator (without it
+    # cobra rejects '-1' as an unknown shorthand flag).
     assert_error "set revocation crl-check-interval -1 rejected" \
         "60..86400" \
-        security vpn set revocation crl-check-interval -1
+        security vpn set revocation crl-check-interval -- -1
 
     assert_error "set revocation crl-check-interval abc rejected" \
         "60..86400" \

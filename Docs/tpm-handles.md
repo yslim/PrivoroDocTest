@@ -1,45 +1,50 @@
 # TPM Resource Map — Handles, NV Indices, Policies
 
-Authoritative inventory of every TPM2 resource the secure-boot stack uses: persistent handles, NV indices, PCR allocation, and the policies bound to sealed secrets. Reflects the current branch.
+Authoritative inventory of every TPM2 resource the secure-boot stack uses: persistent handles, NV indices, PCR allocation, and the policies bound to sealed secrets. Reflects the current branch (`fe-rsa-otp`).
 
 ## Conventions
 
 - **Hash / curve:** `sha384` + `ecc384`, auto-detected per chip (`tpm-algo-lib.sh: detect_tpm_algo`); falls back to `sha256` + `ecc` on a SHA-256-only TPM (e.g. SLB9670). Values below assume SHA-384.
-- **A/B banks:** every per-slot secret is sealed twice, once per firmware bank, because each bank's predicted PCRs differ. Even handle = Bank 0, odd handle = Bank 1.
-- **Sealing policy:** every sealed object is bound to the compound policy `PolicyNV(device) AND PolicyPCR(sha384:1,4,5,8)` — see [Policies](#policies).
+- **A/B banks:** every PCR-sealed per-slot secret is sealed twice, once per firmware bank, because each bank's predicted PCRs differ. Even handle = Bank 0, odd handle = Bank 1.
+- **Sealing policy:** every sealed *persistent object* is bound to the compound policy `PolicyNV(device) AND PolicyPCR(sha384:1,4,5,8)` — see [Policies](#policies). NV *indices* are owner-auth and are **not** PCR-bound (so they survive an OTA bank switch in place).
 
 ## Persistent handles (`0x81xxxxxx`)
 
-| Bank 0 / Bank 1             | Holds                           | Policy | Scope |
-|-----------------------------|---------------------------------|--------|-------|
-| `0x81000001`                | TPM primary key (owner, ecc384) | —      | all   |
-| `0x81010001` / `0x81010002` | VPN PKCS#11 PIN                 | NV+PCR | VPN   |
-| `0x81010101` / `0x81010102` | IPsec PSK                       | NV+PCR | VPN   |
-| `0x81010201` / `0x81010202` | IPsec PPK (post-quantum)        | NV+PCR | VPN   |
-| `0x81020000` / `0x81020001` | rootfs LUKS key                 | NV+PCR | all   |
-| `0x81020010` / `0x81020011` | overlay LUKS key                | NV+PCR | all   |
-| `0x81020020` / `0x81020021` | data FDE submask_B              | NV+PCR | red   |
-| `0x81020030` / `0x81020031` | FE gocryptfs submask_B          | NV+PCR | red   |
+| Bank 0 / Bank 1             | Holds                              | Policy | Scope |
+|-----------------------------|------------------------------------|--------|-------|
+| `0x81000001`                | TPM primary key (owner, ecc384)    | —      | all   |
+| `0x81010001` / `0x81010002` | VPN PKCS#11 PIN                     | NV+PCR | VPN   |
+| `0x81010101` / `0x81010102` | IPsec PSK                          | NV+PCR | VPN   |
+| `0x81010201` / `0x81010202` | IPsec PPK (post-quantum)           | NV+PCR | VPN   |
+| `0x81020000` / `0x81020001` | rootfs LUKS key                    | NV+PCR | all   |
+| `0x81020010` / `0x81020011` | overlay LUKS key                   | NV+PCR | all   |
+| `0x81020020` / `0x81020021` | data FDE submask_B                 | NV+PCR | red   |
+| `0x81020030` / `0x81020031` | FE offline day-data integrity MAC key (HMAC) | NV+PCR | red |
 
-Defined in: `tpm-seal-secret.sh` / `tpm-unseal-secret.sh` (PSK/PPK), `vpn-pkcs11-pin.sh` (VPN PIN), the initramfs unlock scripts (rootfs/overlay), `gocryptfs-init.env` (FE submask_B), `fde-data-provision.sh` (data submask_B), and `pcr-predict-reseal.sh` (reseal map).
+Defined in: `tpm-seal-secret.sh` / `tpm-unseal-secret.sh` (PSK/PPK), `vpn-pkcs11-pin.sh` (VPN PIN), the initramfs unlock scripts (rootfs/overlay), `fde-data-provision.sh` (data submask_B), `gocryptfs-fe.sh` (FE day-MAC key, sealed via the shared `fde_reseal_submask_b` and selected per-bank by `daymac_handle`), and `pcr-predict-reseal.sh` (reseal map).
 
-*Scope:* `all` = every device; `red` = red variant only; `VPN` = present once IPsec/VPN is provisioned.
+*Scope:* `all` = every device; `red` = red variant only; `VPN` = present once IPsec/VPN is provisioned. The FE day-MAC key exists once MFA offline day-data has been fetched.
 
 ## NV indices (`0x01xxxxxx`) — owner hierarchy
 
-| Index        | Variable                | Purpose                               | Attributes / auth             |
-|--------------|-------------------------|---------------------------------------|-------------------------------|
-| `0x01500000` | `FDE_NV_INDEX`          | device-bind operand (PolicyNV anchor) | ownerread / ownerwrite        |
-| `0x01500001` | `FDE_PW_COUNTER_NV`     | pw_retry monotonic counter (FIA_AFL)  | `nt=counter`                  |
-| `0x01500002` | `FDE_PW_BASELINE_NV`    | pw_retry baseline                     | PolicyAuthValue(H(submask_A)) |
-| `0x01500010` | `FDE_ROT_COUNTER_NV`    | KEK-rotation counter                  | `nt=counter`                  |
-| `0x01500011` | `FDE_ROT_BASELINE_NV`   | KEK-rotation baseline                 | ownerwrite                    |
-| `0x01500012` | `FDE_ROT_MAX_NV`        | rotation interval (0 ⇒ default 5)     | ownerwrite                    |
-| `0x01500013` | `FDE_PWAGE_COUNTER_NV`  | passphrase-age counter                | `nt=counter`                  |
-| `0x01500014` | `FDE_PWAGE_BASELINE_NV` | passphrase-age baseline               | ownerwrite                    |
-| `0x01500015` | `FDE_PWAGE_MAX_NV`      | passphrase-age interval (default 100) | ownerwrite                    |
+| Index        | Variable                      | Purpose                                          | Attributes / auth                  | Scope |
+|--------------|-------------------------------|--------------------------------------------------|------------------------------------|-------|
+| `0x01500000` | `FDE_NV_INDEX`                | device-bind operand (PolicyNV anchor)            | ownerread / ownerwrite             | all   |
+| `0x01500001` | `FDE_PW_COUNTER_NV` (data)    | data-FDE pw_retry monotonic counter (FIA_AFL)    | `nt=counter`                       | red   |
+| `0x01500002` | `FDE_PW_BASELINE_NV` (data)   | data-FDE pw_retry baseline                       | PolicyAuthValue(H(submask_A))      | red   |
+| `0x01500003` | `FDE_PW_COUNTER_NV` (FE)      | FE pw_retry monotonic counter (FIA_AFL)          | `nt=counter`                       | red   |
+| `0x01500004` | `FDE_PW_BASELINE_NV` (FE)     | FE pw_retry baseline                             | PolicyAuthValue(H(submask_A_FE))   | red   |
+| `0x01500005` | `FE_LOCKOUT_EXPIRY_NV`        | FE timed-lockout expiry (TPM-Clock ms)           | ownerwrite (u64)                   | red   |
+| `0x01500006` | `FE_LASTSLOT_NV`              | FE offline anti-replay floor (last-accepted slot, epoch-min) | policywrite — PolicyAuthValue(H(submask_A_FE)) | red |
+| `0x01500013` | `FDE_PWAGE_COUNTER_NV`        | data-FDE passphrase-age counter                  | `nt=counter`                       | red   |
+| `0x01500014` | `FDE_PWAGE_BASELINE_NV`       | data-FDE passphrase-age baseline                 | ownerwrite                         | red   |
+| `0x01500015` | `FDE_PWAGE_MAX_NV`            | data-FDE passphrase-age interval (default 100)   | ownerwrite                         | red   |
 
-`0x01500001`–`0x01500015` govern the **data-partition FDE** (red) retry / rotation / aging clocks. Counters are monotonic (`nt=counter`); the displayed value is `effective = counter − baseline`. Defined in `fde-kek-lib.sh`.
+`0x01500007`–`0x01500012` are **free** (an earlier KEK-rotation block was never allocated in code).
+
+- **data-partition FDE** (red) uses `0x01500001/02` (retry) + `0x01500013/14/15` (passphrase aging). Defined in `fde-kek-lib.sh`.
+- **inner FE** (`/securefs`, red) uses `0x01500003/04` (retry — `gocryptfs-fe.sh` overrides the shared `FDE_PW_*` defaults so FE has its own counter, separate from data FDE), `0x01500005` (10-min timed lockout), `0x01500006` (offline anti-replay floor). Defined in `gocryptfs-fe.sh`.
+- Counters are monotonic (`nt=counter`); the displayed retry value is `effective = counter − baseline`.
 
 ## PCR allocation (measured boot, SHA-384)
 
@@ -54,7 +59,7 @@ Policy PCR list: **`sha384:1,4,5,8`** (`tpm-algo-lib.sh`). TF-A computes the SHA
 
 ## Policies
 
-### Compound sealing policy (all sealed secrets)
+### Compound sealing policy (all sealed persistent objects)
 
 Built as a trial policy at seal time, enforced at unseal:
 
@@ -63,16 +68,30 @@ Built as a trial policy at seal time, enforced at unseal:
 
 Sealed object attributes: `fixedtpm | fixedparent | adminwithpolicy`, created under the **owner-hierarchy** ecc384 primary using **encrypted + HMAC sessions**. Unsealing requires satisfying both policy terms — a wrong device serial or any PCR mismatch fails the unseal.
 
-### PolicyAuthValue (FIA_AFL, red only)
+### PolicyAuthValue (red only)
 
-The pw_retry **baseline** NV (`0x01500002`) carries `authValue = H(submask_A)`. Only a caller that derives the correct `submask_A` (from the correct passphrase) can reset the retry counter, so failed attempts increment the monotonic counter (`0x01500001`) without being able to clear it.
+These NVs are `policywrite`-gated by an `authValue` derived from the submask (the KEK), so only a caller that holds the correct passphrase can write them:
+
+- pw_retry **baselines** — data FDE `0x01500002` (`H(submask_A)`) and FE `0x01500004` (`H(submask_A_FE)`): only the passphrase-holder can reset the retry counter, so failed attempts increment the monotonic counter (`0x01500001` / `0x01500003`) without being able to clear the lockout.
+- FE **anti-replay floor** `0x01500006` (`H(submask_A_FE)`): only the passphrase-holder can advance/lower it, so it cannot be reset to enable offline OTP replay without the FE passphrase. `ownerread` stays open (the offline gate only reads the floor; every write happens with the KEK present — enrollment or a successful mount; the write lazily re-defines to migrate the auth after a passphrase change).
+
+### Owner-auth NV (FE timed lockout)
+
+`0x01500005` (lockout expiry) is a plain owner-auth `u64` NV — **no PolicyPCR, no per-bank copy**. On the 3rd FE failure it stores `TPM_Clock_now + 10 min` (ms); the TPM Clock is monotonic and rollback-proof, so the timer is trustworthy even offline. The FE auto-unlocks once the window elapses (admin `security fe unlock-pw-retry` also clears it). It survives an OTA bank switch unchanged (not PCR-bound) and is cleared only by `clear_tpm.sh` (factory).
+
+The FE **anti-replay floor** (`0x01500006`) and the offline-gate behaviour (current-slot ±1 match, monotonic floor, advance-on-full-unlock — blocks old-code replay + system-clock rollback) are described under [PolicyAuthValue](#policyauthvalue-red-only). Both `0x01500005/06` survive an OTA bank switch in place (not PCR-bound).
+
+> **null owner-auth caveat:** with the current default (TPM owner hierarchy = null-auth), a runtime-root attacker can `undefine`+`redefine` any NV regardless of its write policy — so PolicyAuthValue/ownerwrite distinctions only bite once a TPM owner-auth is set. Today the real barrier against a runtime-root attacker is the FE passphrase (never stored, ≥15 chars), the FDE measured-boot gate, and the day-data HMAC; the NV policies are defence-in-depth + future-proofing for an owner-auth deployment.
 
 ## OTA reseal
 
-`pcr-predict-reseal.sh --reseal-extras` re-seals every per-bank secret from the current bank to the target bank under the target bank's **predicted** PCRs: the rootfs key (primary `--seal` target) plus the extras overlay, VPN-PIN, PSK, PPK, FE gocryptfs submask_B, and data submask_B. Red-only secrets soft-skip on grey where the source handle is absent.
+`pcr-predict-reseal.sh --reseal-extras` re-seals every **PCR-sealed** per-bank persistent object from the current bank to the target bank under the target bank's **predicted** PCRs: the rootfs key (primary `--seal` target) plus the extras overlay (required), VPN-PIN, PSK, PPK, data submask_B, and the **FE day-data MAC key** (`reseal_one "mfa-daymac"`). The reseal preserves the secret's *value*, so the day-data HMAC stays valid after the switch. Red-only secrets soft-skip on grey / before provisioning where the source handle is absent.
+
+The FE retry / lockout / anti-replay **NV indices** (`0x01500003`–`0x01500006`) are owner-auth and **not** PCR-bound, so they need **no** reseal — they carry over the OTA bank switch in place. The TPM Clock backing the lockout is likewise bank-independent.
 
 ## Notes
 
-- **fe-otp seed (`0x81020022/23`)** was removed on this branch (FE OTP 2FA dropped; to be redesigned server-side). It is no longer allocated or resealed.
-- **Grey data-FDE submask_A** is described in the dual-DAR design as a random, TPM-sealed value, but the current code allocates **no persistent handle** for it — data FDE is operator-passphrase (red) today. No persistent handle is reserved in code for it (the `0x8102004x` range is now free).
+- **FE OTP 2FA (RSA SecurID)** is implemented on this branch. The inner-FE encryption KEK is `PBKDF2(PIN2, plaintext FE salt at /data/.securefs.kdfsalt)` with **no TPM seal of its own** — device + measured-boot binding is inherited from the outer FDE that encrypts `/data` (dual-DAR). The handles `0x81020030/31` (formerly the FE OTP seed, then the dropped FE submask_B) now hold the **offline day-data integrity HMAC key**. FE FIA_AFL (3 attempts / 10-min timed lockout) + offline anti-replay live in NVs `0x01500003`–`0x01500006`.
+- **fe-otp seed (`0x81020022/23`)** was removed earlier and is **not** reallocated; the FE day-MAC key reuses `0x81020030/31`, not this range.
+- **Grey data-FDE submask_A** is described in the dual-DAR design as a random, TPM-sealed value, but the current code allocates **no persistent handle** for it — data FDE is operator-passphrase (red) today (the `0x8102004x` range is free).
 - `0x81C2C92E…` in the TF-A measured-boot patch is **not** a TPM handle — it is a SHA-384/512 round constant in the software hash implementation.

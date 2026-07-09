@@ -49,12 +49,14 @@ Defined in: `tpm-seal-secret.sh` / `tpm-unseal-secret.sh` (PSK/PPK), `vpn-pkcs11
 | `0x0150001b` | `FDE_FORCECHG_NV` (FE)        | FE temp-passphrase force-change flag (reset)     | ownerwrite                         | red   |
 | `0x0150001c` | `FDE_SALTROT_BASELINE_NV` (data) | data-FDE auto-KEK-rotation baseline (mounts)  | ownerwrite                         | red   |
 | `0x0150001d` | `FDE_SALTROT_BASELINE_NV` (FE)| FE auto-KEK-rotation baseline (mounts)           | ownerwrite                         | red   |
+| `0x0150001e` | `FDE_SALTROT_MAX_NV` (data)   | data-FDE auto-KEK-rotation interval (default 10) | ownerwrite                         | red   |
+| `0x0150001f` | `FDE_SALTROT_MAX_NV` (FE)     | FE auto-KEK-rotation interval (default 10)        | ownerwrite                         | red   |
 
-`0x01500007`–`0x01500012` remain **free** (an earlier KEK-rotation block was never allocated there; the implemented auto KEK rotation reuses the pwage mount counters + baselines `0x0150001c/1d`).
+`0x01500007`–`0x01500012` remain **free** (an earlier KEK-rotation block was never allocated there; the implemented auto KEK rotation reuses the pwage mount counters + baselines `0x0150001c/1d` and interval NVs `0x0150001e/1f`).
 
-- **data-partition FDE** (red) uses `0x01500001/02` (retry) + `0x01500013/14/15` (passphrase aging) + `0x01500019` (timed lockout) + `0x0150001a` (force-change) + `0x0150001c` (auto KEK-rotation baseline). Defined in `fde-kek-lib.sh`.
-- **inner FE** (`/securefs`, red) uses `0x01500003/04` (retry — `gocryptfs-fe.sh` overrides the shared `FDE_PW_*` defaults so FE has its own counter, separate from data FDE), `0x01500005` (10-min timed lockout), `0x01500006` (offline anti-replay floor), `0x01500016/17/18` (passphrase aging), `0x0150001b` (force-change), `0x0150001d` (auto KEK-rotation baseline). Defined in `gocryptfs-fe.sh`.
-- **Auto KEK rotation** (both): every 10 mounts the salt is regenerated so the KEK (`submask_A`/`submask_A_FE`) rotates under the SAME passphrase. `effective = pwage counter − saltrot baseline ≥ 10` triggers it; the baseline resets on each rotation. Crash-safe: FDE via LUKS `luksAddKey`→reseal→`luksRemoveKey`, FE via a `.kdfsalt.new` WAL side-file + mount fallback.
+- **data-partition FDE** (red) uses `0x01500001/02` (retry) + `0x01500013/14/15` (passphrase aging) + `0x01500019` (timed lockout) + `0x0150001a` (force-change) + `0x0150001c/1e` (auto KEK-rotation baseline + interval). Defined in `fde-kek-lib.sh`.
+- **inner FE** (`/securefs`, red) uses `0x01500003/04` (retry — `gocryptfs-fe.sh` overrides the shared `FDE_PW_*` defaults so FE has its own counter, separate from data FDE), `0x01500005` (10-min timed lockout), `0x01500006` (offline anti-replay floor), `0x01500016/17/18` (passphrase aging), `0x0150001b` (force-change), `0x0150001d/1f` (auto KEK-rotation baseline + interval). Defined in `gocryptfs-fe.sh`.
+- **Auto KEK rotation** (both): every N mounts (default 10, operator-set via `security fde/fe kek-rotation set`, stored in `0x0150001e/1f`) the salt is regenerated so the KEK (`submask_A`/`submask_A_FE`) rotates under the SAME passphrase. `effective = pwage counter − saltrot baseline ≥ interval` triggers it; the baseline resets on each rotation. Crash-safe: FDE via LUKS `luksAddKey`→reseal→`luksRemoveKey`, FE via a `.kdfsalt.new` WAL side-file + mount fallback.
 - Counters are monotonic (`nt=counter`); the displayed retry value is `effective = counter − baseline`.
 
 ## PCR allocation (measured boot, SHA-384)

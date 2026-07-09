@@ -20,8 +20,10 @@ Authoritative inventory of every TPM2 resource the secure-boot stack uses: persi
 | `0x81020010` / `0x81020011` | overlay LUKS key                   | NV+PCR | all   |
 | `0x81020020` / `0x81020021` | data FDE submask_B                 | NV+PCR | red   |
 | `0x81020030` / `0x81020031` | FE offline day-data integrity MAC key (HMAC) | NV+PCR | red |
+| `0x81020040` / `0x81020041` | data FDE recovery hash (submask_A escrow, admin reset-passphrase) | NV+PCR | red |
+| `0x81020050` / `0x81020051` | FE recovery hash (submask_A_FE escrow, admin reset-passphrase) | NV+PCR | red |
 
-Defined in: `tpm-seal-secret.sh` / `tpm-unseal-secret.sh` (PSK/PPK), `vpn-pkcs11-pin.sh` (VPN PIN), the initramfs unlock scripts (rootfs/overlay), `fde-data-provision.sh` (data submask_B), `gocryptfs-fe.sh` (FE day-MAC key, sealed via the shared `fde_reseal_submask_b` and selected per-bank by `daymac_handle`), and `pcr-predict-reseal.sh` (reseal map).
+Defined in: `tpm-seal-secret.sh` / `tpm-unseal-secret.sh` (PSK/PPK), `vpn-pkcs11-pin.sh` (VPN PIN), the initramfs unlock scripts (rootfs/overlay), `fde-data-provision.sh` (data submask_B), `gocryptfs-fe.sh` (FE day-MAC key, sealed via the shared `fde_reseal_submask_b` and selected per-bank by `daymac_handle`), `fde-data-provision.sh` / `fde-data-change-passphrase.sh` / `fde_rotate_salt` (data recovery hash via `fde_seal_recovery_hash`), `gocryptfs-fe.sh` (FE recovery hash), and `pcr-predict-reseal.sh` (reseal map). The recovery hashes seal `submask_A`/`submask_A_FE` (= the KEK) for admin `reset-passphrase`; they are re-sealed on every `change-passphrase` and auto KEK rotation.
 
 *Scope:* `all` = every device; `red` = red variant only; `VPN` = present once IPsec/VPN is provisioned. The FE day-MAC key exists once MFA offline day-data has been fetched.
 
@@ -39,11 +41,20 @@ Defined in: `tpm-seal-secret.sh` / `tpm-unseal-secret.sh` (PSK/PPK), `vpn-pkcs11
 | `0x01500013` | `FDE_PWAGE_COUNTER_NV`        | data-FDE passphrase-age counter                  | `nt=counter`                       | red   |
 | `0x01500014` | `FDE_PWAGE_BASELINE_NV`       | data-FDE passphrase-age baseline                 | ownerwrite                         | red   |
 | `0x01500015` | `FDE_PWAGE_MAX_NV`            | data-FDE passphrase-age interval (default 100)   | ownerwrite                         | red   |
+| `0x01500016` | `FDE_PWAGE_COUNTER_NV` (FE)   | FE passphrase-age counter                        | `nt=counter`                       | red   |
+| `0x01500017` | `FDE_PWAGE_BASELINE_NV` (FE)  | FE passphrase-age baseline                       | ownerwrite                         | red   |
+| `0x01500018` | `FDE_PWAGE_MAX_NV` (FE)       | FE passphrase-age interval (default 100)         | ownerwrite                         | red   |
+| `0x01500019` | `FDE_LOCKOUT_EXPIRY_NV` (data)| data-FDE timed-lockout expiry (TPM-Clock ms)     | ownerwrite (u64)                   | red   |
+| `0x0150001a` | `FDE_FORCECHG_NV` (data)      | data-FDE temp-passphrase force-change flag (reset) | ownerwrite                       | red   |
+| `0x0150001b` | `FDE_FORCECHG_NV` (FE)        | FE temp-passphrase force-change flag (reset)     | ownerwrite                         | red   |
+| `0x0150001c` | `FDE_SALTROT_BASELINE_NV` (data) | data-FDE auto-KEK-rotation baseline (mounts)  | ownerwrite                         | red   |
+| `0x0150001d` | `FDE_SALTROT_BASELINE_NV` (FE)| FE auto-KEK-rotation baseline (mounts)           | ownerwrite                         | red   |
 
-`0x01500007`–`0x01500012` are **free** (an earlier KEK-rotation block was never allocated in code).
+`0x01500007`–`0x01500012` remain **free** (an earlier KEK-rotation block was never allocated there; the implemented auto KEK rotation reuses the pwage mount counters + baselines `0x0150001c/1d`).
 
-- **data-partition FDE** (red) uses `0x01500001/02` (retry) + `0x01500013/14/15` (passphrase aging). Defined in `fde-kek-lib.sh`.
-- **inner FE** (`/securefs`, red) uses `0x01500003/04` (retry — `gocryptfs-fe.sh` overrides the shared `FDE_PW_*` defaults so FE has its own counter, separate from data FDE), `0x01500005` (10-min timed lockout), `0x01500006` (offline anti-replay floor). Defined in `gocryptfs-fe.sh`.
+- **data-partition FDE** (red) uses `0x01500001/02` (retry) + `0x01500013/14/15` (passphrase aging) + `0x01500019` (timed lockout) + `0x0150001a` (force-change) + `0x0150001c` (auto KEK-rotation baseline). Defined in `fde-kek-lib.sh`.
+- **inner FE** (`/securefs`, red) uses `0x01500003/04` (retry — `gocryptfs-fe.sh` overrides the shared `FDE_PW_*` defaults so FE has its own counter, separate from data FDE), `0x01500005` (10-min timed lockout), `0x01500006` (offline anti-replay floor), `0x01500016/17/18` (passphrase aging), `0x0150001b` (force-change), `0x0150001d` (auto KEK-rotation baseline). Defined in `gocryptfs-fe.sh`.
+- **Auto KEK rotation** (both): every 10 mounts the salt is regenerated so the KEK (`submask_A`/`submask_A_FE`) rotates under the SAME passphrase. `effective = pwage counter − saltrot baseline ≥ 10` triggers it; the baseline resets on each rotation. Crash-safe: FDE via LUKS `luksAddKey`→reseal→`luksRemoveKey`, FE via a `.kdfsalt.new` WAL side-file + mount fallback.
 - Counters are monotonic (`nt=counter`); the displayed retry value is `effective = counter − baseline`.
 
 ## PCR allocation (measured boot, SHA-384)
@@ -85,7 +96,7 @@ The FE **anti-replay floor** (`0x01500006`) and the offline-gate behaviour (curr
 
 ## OTA reseal
 
-`pcr-predict-reseal.sh --reseal-extras` re-seals every **PCR-sealed** per-bank persistent object from the current bank to the target bank under the target bank's **predicted** PCRs: the rootfs key (primary `--seal` target) plus the extras overlay (required), VPN-PIN, PSK, PPK, data submask_B, and the **FE day-data MAC key** (`reseal_one "mfa-daymac"`). The reseal preserves the secret's *value*, so the day-data HMAC stays valid after the switch. Red-only secrets soft-skip on grey / before provisioning where the source handle is absent.
+`pcr-predict-reseal.sh --reseal-extras` re-seals every **PCR-sealed** per-bank persistent object from the current bank to the target bank under the target bank's **predicted** PCRs: the rootfs key (primary `--seal` target) plus the extras overlay (required), VPN-PIN, PSK, PPK, data submask_B, the **FE day-data MAC key** (`reseal_one "mfa-daymac"`), and the **data + FE recovery hashes** (`reseal_one "data-recovery"` / `"fe-recovery"`). The reseal preserves the secret's *value*, so the day-data HMAC and the recovery hashes stay valid after the switch. Red-only secrets soft-skip on grey / before provisioning where the source handle is absent.
 
 The FE retry / lockout / anti-replay **NV indices** (`0x01500003`–`0x01500006`) are owner-auth and **not** PCR-bound, so they need **no** reseal — they carry over the OTA bank switch in place. The TPM Clock backing the lockout is likewise bank-independent.
 

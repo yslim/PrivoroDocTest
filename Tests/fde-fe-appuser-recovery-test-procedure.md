@@ -1,6 +1,6 @@
 ---
-title: "Dual-DAR FDE/FE — Admin Recovery — On-Device Test Procedure"
-subtitle: "Admin scope: branch fde-fe-admin-recovery (0e0ffb62) · appuser scope (T5–T7): branch fde-fe-appuser-integration (shoor)"
+title: "Dual-DAR FDE/FE — Admin Recovery + self-contained backends — On-Device Test Procedure"
+subtitle: "branch fde-fe-admin-recovery (7eb7fde5)"
 author: "Privoro / Akita security team"
 date: "2026-07-20"
 geometry: margin=2cm
@@ -19,18 +19,26 @@ groups land together here and **none has been exercised on hardware yet**:
    `recovery-passphrase change`, and a **separate** recovery FIA_AFL lockout.
 2. **Offline RSA-OTP algorithm rework** — the finalized CryptPack day-file
    algorithm, verified in-process by the FIPS C helper `fe-offline-verify`.
-3. **appuser integration** — the unprivileged data-owner account drives the
-   user-facing FDE/FE ops through the scli `fde-user` / `fe-user` trees
-   (scoped sudoers, `SCLI_GUARDED_ONESHOT`), typically from a GUI-spawned pty.
-   `security fde/fe` (admin) and `fde-user/fe-user` (appuser) share one Go
-   implementation.
+3. **Self-contained backends — one sudo entry per user-facing command.** Each
+   command maps to a single backend that does the whole operation as root, so the
+   appuser sudoers is one line per command and the security gates cannot be
+   bypassed:
+   - **FDE** `fde-data-mount.sh` prompts on the tty, unlocks + mounts, and drives
+     any owed forced change in-process (`--current-file` into
+     `fde-data-change-passphrase.sh`).  `fde-data-{unmount,status,change-passphrase}.sh`
+     likewise self-contained.
+   - **FE** `gocryptfs-fe.sh mount` reads PIN2 + RSA PIN + tokencode, runs the
+     online RSA-OTP **in-process** via `scli … internal-mfa-auth` (the /auth JSON
+     loop stays in Go → **no jq**) or the offline day-file gate, then opens.  The
+     OTP gate is **bound inside `mount`** — the `mount-online` (open-trusting-
+     prior-auth) subcommand is removed, so appuser cannot bypass 2FA.
+     `gocryptfs-fe.sh {change,unmount,status}` complete the set.
+   `security fde/fe` (admin) and the appuser front-end reach the **same** backends.
 
-**Scope split (2026-07-20).** This branch (`fde-fe-admin-recovery`) owns the
-**admin** `security fde/fe` commands only — **phases 0–4 and 8**. The **appuser**
-path (**phases 5–7**) was moved out of this branch onto
-`fde-fe-appuser-integration` and is **shoor's** to finish/verify (he extracts
-what he needs from the admin commands). Phases 5–7 are kept here for reference;
-run them only against a build that carries the appuser integration.
+**appuser account, GUI, and the `fde-user`/`fe-user` front-ends are shoor's** —
+this branch delivers the self-contained backends + the appuser sudoers they need.
+Phases **5–7** exercise the appuser side and require shoor's account/wrappers
+present in the build.
 
 **Target**: STM32MP15, red variant (`shiba-*-red`). FE / appuser are red-only.
 
@@ -52,9 +60,9 @@ human tester at the console (or GUI pty). Steps needing a secret are marked
 | 2 | Data FDE — FIA_AFL lockouts | [-] |
 | 3 | Inner FE — recovery conf (admin) | [-] |
 | 4 | OTP offline algorithm (FIPS) | [-] |
-| 5 | appuser path — *shoor scope* | [-] |
-| 6 | Security boundary (sudoers / env / guard) — *shoor scope* | [-] |
-| 7 | pty (GUI model) — *shoor scope* | [-] |
+| 5 | appuser path (needs shoor's front-end) | [-] |
+| 6 | Security boundary (sudoers scoping / bypass / env) | [-] |
+| 7 | pty (GUI model) | [-] |
 | 8 | Dual-DAR teardown + admin regression | [-] |
 
 \newpage
@@ -97,18 +105,42 @@ cat /usr/lib/shiba/shiba-variant     # must be: red
 
 ## T0 — Build / install sanity
 
-- **T0.1** `appuser` account exists, shell `/bin/sh`:
-  `getent passwd appuser` → shell field `/bin/sh`.
+- **T0.1** (shoor) `appuser` account + front-end present (account, GUI/wrappers,
+  and any `fde-user`/`fe-user` scli tree are shoor's).
   Result: `[-]` __________
-- **T0.2** Wrappers present, old ones gone:
-  `ls /usr/bin/appuser-fde /usr/bin/appuser-fe` present;
-  `ls /usr/bin/appuser-mount` → absent.
+- **T0.2** sudoers valid + matches the reference below:
+  `visudo -cf /etc/sudoers.d/scli` → parsed OK; the `appuser` rule lists exactly
+  the 8 self-contained backends and `Defaults env_reset` is present.
   Result: `[-]` __________
-- **T0.3** sudoers valid + scoped: `visudo -cf /etc/sudoers.d/scli` → parsed OK;
-  rule lists the appuser backends + `Defaults env_reset`.
+- **T0.3** Backends present: `ls /usr/sbin/fde-data-{mount,unmount,status,chg-reason,change-passphrase}.sh /usr/sbin/gocryptfs-fe.sh /usr/sbin/fe-offline-verify`.
   Result: `[-]` __________
-- **T0.4** Backends present: `ls /usr/sbin/fde-data-{mount,unmount,status,chg-reason,change-passphrase}.sh /usr/sbin/gocryptfs-fe.sh /usr/sbin/fe-offline-verify`.
-  Result: `[-]` __________
+
+## 0.3 appuser sudoers — reference (one entry per command, no bypass)
+
+The self-contained backends let appuser's sudoers be exactly one line per
+user-facing command. `mfa-mtls-request.sh` is **not** listed (the FE `mount`
+backend calls it in-process as root); admin-only subcommands
+(`gocryptfs-fe.sh reset|recovery-change|init|mount-online`, `fde-data-reset-passphrase.sh`,
+…) are **excluded**, so 2FA / recovery cannot be bypassed.
+
+```
+Defaults env_reset                 # backends honour FDE_KEK_LIB/DATA_PART env -> must strip
+
+appuser ALL=(root) NOPASSWD: \
+    /usr/sbin/fde-data-mount.sh "", \
+    /usr/sbin/fde-data-unmount.sh "", \
+    /usr/sbin/fde-data-status.sh "", \
+    /usr/sbin/fde-data-change-passphrase.sh "", \
+    /usr/sbin/gocryptfs-fe.sh mount, \
+    /usr/sbin/gocryptfs-fe.sh change, \
+    /usr/sbin/gocryptfs-fe.sh unmount, \
+    /usr/sbin/gocryptfs-fe.sh status
+```
+
+The `""` (no-argument) form on the FDE scripts matters: it forbids appuser from
+passing `fde-data-change-passphrase.sh --current-file <own file>` (which would
+skip the current-passphrase check).  The in-process forced change reaches
+`--current-file` only from `fde-data-mount.sh` running as root, not via sudo.
 
 \newpage
 
@@ -172,13 +204,20 @@ Requires the data FDE mounted first (`require_data_mounted`).
   `gocryptfs.recovery.conf`.
   Result: `[-]` __________
 - **T3.2 🔑 mount (offline OTP)** — `security fe mount`; enter FE passphrase
-  (PIN2 ≥15), RSA PIN, tokencode with the proxy **unreachable**. Expected:
-  offline day-file gate passes → `/securefs` mounted → forced change on first
-  mount.
+  (PIN2 ≥15), RSA PIN, tokencode with the proxy **unreachable**. Expected: the
+  self-contained `mount` backend runs `internal-mfa-auth` → exit 3 (unreachable)
+  → offline day-file gate passes → `/securefs` mounted → forced change on first
+  mount (driven via the shared `change` backend).
   Result: `[-]` __________
 - **T3.3 🔑 mount (online OTP)** — same with the MFA proxy reachable. Expected:
-  online `/auth` validates, `mount-online` opens the store; offline days
-  refreshed.
+  `internal-mfa-auth` validates `/auth` in-process (exit 0) → the same `mount`
+  backend opens the store (no separate `mount-online`).  NB: online mounts no
+  longer refresh day-data (admin `security mfa sync` does); a server New-PIN
+  challenge here falls back to offline (set the new PIN via `mfa sync`).
+  Result: `[-]` __________
+- **T3.3b 🔑 online OTP denied** — mount with a wrong tokencode, proxy reachable.
+  Expected: `internal-mfa-auth` exit 4 → `mount` strikes FIA_AFL + refuses (no
+  silent offline fallback on an explicit denial).
   Result: `[-]` __________
 - **T3.4 🔑 change-passphrase** — `security fe change-passphrase` (verifies
   current first, then new). Expected: re-wrap succeeds.
@@ -211,31 +250,25 @@ Requires the data FDE mounted first (`require_data_mounted`).
 
 \newpage
 
-# 5. appuser path (NEW — commit 1672484a)
+# 5. appuser path (requires shoor's front-end)
 
-- **T5.1 login** — log in as `appuser` on the serial console. Expected: a
-  `/bin/sh` prompt (not scli).
+The self-contained backends are ours; the appuser account + front-end (GUI, or a
+`fde-user`/`fe-user` scli tree) and `/securefs` data access are **shoor's**.  Run
+these against a build that carries them.  Each appuser command must reach exactly
+one backend (per the 0.3 sudoers) and behave like the admin path (phases 1/3).
+
+- **T5.1** appuser reaches FDE mount via the front-end → `/data` mounted; the
+  forced change is prompted when owed (same as T1.2).
   Result: `[-]` __________
-- **T5.2 🔑 appuser-fde mount** — `appuser-fde mount`, enter the data
-  passphrase. Expected: same flow as admin (prompt → mount → forced change if
-  owed). `/data` mounted.
+- **T5.2** appuser FDE unmount / status / 🔑 change-passphrase behave as admin.
   Result: `[-]` __________
-- **T5.3 appuser-fde status / unmount** — `appuser-fde status`, `appuser-fde
-  unmount`. Expected: work; unmount refuses if FE still mounted.
+- **T5.3 🔑** appuser reaches FE mount via the front-end (PIN2 + RSA OTP, online
+  or offline) → `/securefs` mounted; FE change / unmount / status work.
   Result: `[-]` __________
-- **T5.4 🔑 appuser-fde change-passphrase** — Expected: re-keys user slot.
-  Result: `[-]` __________
-- **T5.5 🔑 appuser-fe mount** — `appuser-fe mount` (PIN2 + RSA OTP). Expected:
-  `/securefs` mounted.
-  Result: `[-]` __________
-- **T5.6 /securefs/app ownership** — `ls -ld /securefs/app` → `appuser:appuser`,
-  mode `0700`. As appuser: write + read back a file under `/securefs/app`.
-  Result: `[-]` __________
-- **T5.7 TSF material protection** — as appuser, attempt (must all FAIL):
-  write/rename/unlink under `/securefs` root; touch `/data/anything`;
-  rename `/data/.securefs`; rename `/data/.mfa`.
-  Result: `[-]` __________
-- **T5.8 appuser-fe status / unmount / 🔑 change-passphrase** — Expected: work.
+- **T5.4** appuser can read/write the intended user data area, and TSF material
+  is protected — as appuser (must all FAIL): touch `/data/anything`; rename
+  `/data/.securefs`; rename `/data/.mfa`; write under `/securefs` root.
+  (`/securefs/app` ownership is part of shoor's FE-access work.)
   Result: `[-]` __________
 
 # 6. Security boundary (sudoers / env / guard)
@@ -246,31 +279,40 @@ Requires the data FDE mounted first (`require_data_mounted`).
   `sudo /usr/sbin/gocryptfs-fe.sh recovery-change`,
   `sudo /usr/sbin/gocryptfs-fe.sh init`.
   Result: `[-]` __________
-- **T6.2 allowed backend reachable** — `sudo /usr/sbin/gocryptfs-fe.sh status`
-  runs (sudo permits). 
+- **T6.2 2FA-bypass denied** — as appuser:
+  `sudo /usr/sbin/gocryptfs-fe.sh mount-online` → DENIED (not in sudoers; also the
+  dispatch is removed).  Confirms appuser cannot open the FE store without passing
+  the OTP gate bound inside `mount`.
   Result: `[-]` __________
-- **T6.3 env_reset** — as appuser:
-  `sudo FDE_KEK_LIB=/tmp/evil.sh /usr/sbin/fde-data-status.sh`. Expected: the
-  env override is stripped (evil path not used).
+- **T6.3 argument scoping** — as appuser:
+  `sudo /usr/sbin/fde-data-change-passphrase.sh --current-file /tmp/x` → DENIED
+  (the `""` rule forbids arguments).  Confirms appuser cannot re-key with an
+  attacker-supplied "current" file.
   Result: `[-]` __________
-- **T6.4 guard boundary** — as appuser:
-  `SCLI_GUARDED_ONESHOT=1 scli security fde reset-passphrase`. Expected:
-  cmdguard permission-denied (appuser only reaches `fde-user`/`fe-user`).
+- **T6.4 allowed backend reachable** — `sudo /usr/sbin/gocryptfs-fe.sh status`
+  runs (sudo permits the 8 listed entries).
+  Result: `[-]` __________
+- **T6.5 env_reset** — as appuser:
+  `sudo FDE_KEK_LIB=/tmp/evil.sh /usr/sbin/fde-data-status.sh`. Expected: the env
+  override is stripped (evil path not used).
   Result: `[-]` __________
 
 \newpage
 
 # 7. pty (GUI model)
 
-- **T7.1 🔑 mount inside a pty** — run the appuser mount through a pty, e.g.
-  `script -q /dev/null -c 'appuser-fde mount'` (or `python3 -c 'import pty,sys;
-  pty.spawn(["appuser-fde","mount"])'`). Expected: `term.ReadPassword` no-echo
-  works in the pty; mount succeeds. Confirms the GUI-spawns-a-pty model needs no
-  code change.
+The FDE backend self-prompts on the tty, so it runs directly in a GUI-spawned
+pty (the FE backend reads secrets on stdin from its front-end).
+
+- **T7.1 🔑 FDE mount inside a pty** — run the self-contained FDE mount through a
+  pty, e.g. `script -q /dev/null -c 'sudo /usr/sbin/fde-data-mount.sh'` (or
+  `python3 -c 'import pty; pty.spawn(["sudo","/usr/sbin/fde-data-mount.sh"])'`).
+  Expected: the no-echo passphrase prompt works in the pty; mount succeeds.
+  Confirms the GUI-spawns-a-pty model needs no code change.
   Result: `[-]` __________
 - **T7.2 🔑 Ctrl-C restore** — press Ctrl-C at the passphrase prompt. Expected:
-  tty echo is restored (`restoreTerminalOnSignal` in the guarded-oneshot path);
-  the shell is usable afterward.
+  tty echo is restored (`fde-read-passphrase.sh` `trap cleanup INT`); the shell is
+  usable afterward.
   Result: `[-]` __________
 
 # 8. Dual-DAR teardown + admin regression
@@ -285,6 +327,19 @@ Requires the data FDE mounted first (`require_data_mounted`).
   Result: `[-]` __________
 
 \newpage
+
+# Known limitations (self-contained FE mount) — verify behaviour, not bugs
+
+- **New-PIN during mount → offline fallback.** A server-forced RSA New-PIN
+  challenge during `mount` cannot complete (the in-process `internal-mfa-auth`
+  reads the exhausted creds pipe); it falls back to the offline gate.  Set the new
+  PIN via `security mfa sync` / `create-passphrase`.  (Fix path: reopen fd 0 to
+  `/dev/tty` for challenges.)
+- **Online mount no longer refreshes day-data.** Admin `security mfa sync` keeps
+  the offline day-files current; online `mount` only validates + opens.
+- **Dead shell fns.** `fe_mount`, `fe_mount_online`, `fe_pw_retry_strike` and their
+  dispatch entries are left in `gocryptfs-fe.sh` (unused after `fe_mount_secure`);
+  harmless, pending cleanup.
 
 # Notes / issues log
 

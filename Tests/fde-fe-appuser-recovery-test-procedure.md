@@ -56,8 +56,8 @@ human tester at the console (or GUI pty). Steps needing a secret are marked
 | Phase | Area | Status |
 |-------|------|--------|
 | 0 | Build / install sanity | [-] |
-| 1 | Data FDE — recovery keyslot (admin) | [-] |
-| 2 | Data FDE — FIA_AFL lockouts | [-] |
+| 1 | Data FDE — recovery keyslot (admin) | [P] r184 (T1.1/1.2/1.3/1.7) |
+| 2 | Data FDE — FIA_AFL lockouts | [~] partial (pw_retry strike/reset) |
 | 3 | Inner FE — recovery conf (admin) | [-] |
 | 4 | OTP offline algorithm (FIPS) | [-] |
 | 5 | appuser path (needs shoor's front-end) | [-] |
@@ -340,6 +340,26 @@ pty (the FE backend reads secrets on stdin from its front-end).
 - **Dead shell fns.** `fe_mount`, `fe_mount_online`, `fe_pw_retry_strike` and their
   dispatch entries are left in `gocryptfs-fe.sh` (unused after `fe_mount_secure`);
   harmless, pending cleanup.
+
+# On-device results log
+
+**2026-07-20 · shiba-25q3ml · r184-20260720 · FDE admin path (via `security fde …`)**
+
+- Build sanity: self-contained backends present (`fe_mount_secure`, `internal-mfa-auth`,
+  `--current-file`, FDE `--tty`). **[P]**
+- **T1.1** create-passphrase → `provisioned: yes` + `recovery slot: yes` (keyslot 0+1). **[P]**
+- **T1.2** mount + forced change: self-contained backend prompts on the tty; a wrong
+  passphrase struck FIA_AFL (`remaining=2`); correct one mounted `/data`; the forced-change
+  banner fired (chg-reason=reset); "must differ" + password policy (`needs a lowercase`)
+  enforced; re-key succeeded — all in one flow, no Go orchestration. **[P]**
+- **T1.3** unmount (umount + close, "unmounted and locked") → remount with the NEW
+  passphrase mounts directly, **no re-forced-change** (flag cleared, one-shot). **[P]**
+- **T1.7** `show status` correct throughout (mounted, pw_retry reset to 3/3 on success). **[P]**
+- T2.1 (partial): pw_retry decremented on the wrong passphrase, reset on success; full
+  lockout/auto-unlock not yet exercised.
+
+_Pending: FDE change-passphrase standalone, reset/recovery, lockouts; FE (create + mount
+via internal-mfa-auth online/offline); appuser sudoers (shoor's front-end)._
 
 # Notes / issues log
 

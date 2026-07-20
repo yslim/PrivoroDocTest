@@ -1,6 +1,6 @@
 ---
-title: "Dual-DAR FDE/FE — Admin Recovery + appuser — On-Device Test Procedure"
-subtitle: "Branch: fde-fe-admin-recovery · Tip commit: 1672484a"
+title: "Dual-DAR FDE/FE — Admin Recovery — On-Device Test Procedure"
+subtitle: "Admin scope: branch fde-fe-admin-recovery (0e0ffb62) · appuser scope (T5–T7): branch fde-fe-appuser-integration (shoor)"
 author: "Privoro / Akita security team"
 date: "2026-07-20"
 geometry: margin=2cm
@@ -25,6 +25,13 @@ groups land together here and **none has been exercised on hardware yet**:
    `security fde/fe` (admin) and `fde-user/fe-user` (appuser) share one Go
    implementation.
 
+**Scope split (2026-07-20).** This branch (`fde-fe-admin-recovery`) owns the
+**admin** `security fde/fe` commands only — **phases 0–4 and 8**. The **appuser**
+path (**phases 5–7**) was moved out of this branch onto
+`fde-fe-appuser-integration` and is **shoor's** to finish/verify (he extracts
+what he needs from the admin commands). Phases 5–7 are kept here for reference;
+run them only against a build that carries the appuser integration.
+
 **Target**: STM32MP15, red variant (`shiba-*-red`). FE / appuser are red-only.
 
 **Operator-typed secrets.** Every passphrase / PIN / tokencode is typed by the
@@ -45,9 +52,9 @@ human tester at the console (or GUI pty). Steps needing a secret are marked
 | 2 | Data FDE — FIA_AFL lockouts | [-] |
 | 3 | Inner FE — recovery conf (admin) | [-] |
 | 4 | OTP offline algorithm (FIPS) | [-] |
-| 5 | appuser path (NEW) | [-] |
-| 6 | Security boundary (sudoers / env / guard) | [-] |
-| 7 | pty (GUI model) | [-] |
+| 5 | appuser path — *shoor scope* | [-] |
+| 6 | Security boundary (sudoers / env / guard) — *shoor scope* | [-] |
+| 7 | pty (GUI model) — *shoor scope* | [-] |
 | 8 | Dual-DAR teardown + admin regression | [-] |
 
 \newpage

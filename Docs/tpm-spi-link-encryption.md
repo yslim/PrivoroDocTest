@@ -113,7 +113,26 @@
 | 성능 | `GetRandom`(32B) 명령당 약 24 ms (세션 없을 때 약 9 ms). 유휴 시 30초에 1회라 영향 무시 가능 |
 | 회귀 | 부팅 rootfs/FDE 키 해제, VPN PIN 정상. PPK 봉인/해제 왕복 일치 (hwrng 동시 부하 상태에서 시험) |
 
-## 5. 제한 사항
+## 5. 작업 후 TPM SPI Link Encryption 적용 범위
+
+| 구분 | 대상 (스크립트/모듈) | 보호 | 비고 |
+|---|---|---|---|
+| 커널 | hwrng `TPM2_GetRandom` | 응답 암호화 + HMAC | 이번 작업 (커널 백포트) |
+| 커널 | `TPM2_PCR_Extend` | HMAC | 이번 작업. 현재 커널에서 호출하는 곳 없음 (IMA 미사용) |
+| 사용자 공간 | rootfs LUKS 키 해제 (`init-dmcrypt.sh`, initramfs) | 응답 암호화 | 기존 |
+| 사용자 공간 | overlay·data FDE·FE 키 봉인/해제 (`fde-kek-lib.sh`, initramfs `init-fde.sh`, `fe-lib.sh`) | 입력/응답 암호화 | 기존 |
+| 사용자 공간 | OTA rootfs 새 키 봉인·재봉인 (`pcr-predict-reseal.sh`) | 입력/응답 암호화 | 기존 |
+| 사용자 공간 | VPN PKCS#11 PIN (`vpn-pkcs11-pin.sh`) | 입력/응답 암호화 | 기존 |
+| 사용자 공간 | VPN PSK/PPK (`tpm-seal-secret.sh`, `tpm-unseal-secret.sh`) | 입력/응답 암호화 | 이번 작업 |
+| PKCS#11 | 토큰/키 프로비저닝 (`pkcs11-functions.inc`) | libtpm2_pkcs11 세션 | 이번 작업 (`tpm2_ptool` 대체) |
+| PKCS#11 | VPN 인증 서명 등 런타임 사용 (libtpm2_pkcs11) | libtpm2_pkcs11 세션 | 기존 |
+
+암호화하지 않는 TPM 트래픽:
+
+- 비밀이 실리지 않는 명령: PCR 읽기, 핸들/속성 조회, 공개키 조회, NV 카운터 등
+- 부트로더(TF-A, U-Boot)의 PCR extend (6장 참조)
+
+## 6. 제한 사항
 
 - 수동 도청만 막음. 능동 인터포저까지 막으려면 EK 인증서로 세션 키를 검증해야 하는데 구현돼 있지 않음.
 - 커널 세션 암호(ECDH P-256, AES-128-CFB, HMAC-SHA-256)는 OpenSSL FIPS 경계 밖. 전송 보호용이고 키 생성에는 쓰이지 않음.

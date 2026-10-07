@@ -6,7 +6,7 @@
 |---|---|
 | 목적 | TPM SPI 버스를 지나는 비밀 데이터와 난수를 암호화해 버스 도청을 막음 |
 | 브랜치 | `tpm-spi-encryption` (기준 `upstream/release-toe2` `8d4757a3`) |
-| 커밋 | 4건: `e24c12e9`, `0186b2d8`, `10fddfff`, `251d36f4` |
+| 커밋 | 기능 7건: `e24c12e9`, `0186b2d8`, `10fddfff`, `251d36f4`, `48be1c22`, `32251aa8`(`8e896ae7` 보완), `4a17e809` (주석·문서 커밋 제외) |
 
 ## 2. 작업 전 상태
 
@@ -23,6 +23,8 @@
 
 - `tpm-seal-secret.sh`: `tpm2_create`를 암호화 HMAC 세션으로 감쌈 (입력 비밀 암호화)
 - `tpm-unseal-secret.sh`: 정책 세션을 salted 암호화 세션으로 교체 (해제 응답 암호화)
+- 비밀을 stdin으로 전달해 프로세스 목록(`ps`)에 보이지 않게 함 (`48be1c22`)
+- SCLI에서 PSK/PPK를 지우면 TPM 핸들도 삭제함. 전에는 남아 있었음 (`4a17e809`)
 
 ### 3.2 난수 생성 일원화 (`0186b2d8`)
 
@@ -48,7 +50,9 @@
   - hwrng `TPM2_GetRandom`: 응답 암호화 + HMAC
   - `TPM2_PCR_Extend`: HMAC
   - 세션은 hwrng 호출 사이에 유지하고, 사용자 공간 명령 전에 닫음
+- 부팅 경고 수정 (`32251aa8`): 첫 세션이 비동기 TPM probe 안에서 커널 DRBG의 `hmac(sha512)`를 처음 만들며 모듈 로드를 요청해 WARNING이 났음 → 부팅 초기에 `CRYPTO_NOLOAD`로 미리 만들어 해결 (부팅 시간 영향 없음)
 - 디바이스에서 동작 확인. hwrng 명령당 약 24 ms (세션 없을 때 약 9 ms), 유휴 시 영향 없음
+- grey·red OTA, FDE 프로비저닝, EST 등록 → VPN 연결까지 정상
 
 ## 4. 작업 후 TPM SPI Link Encryption 적용 범위
 
@@ -60,7 +64,7 @@
 | 사용자 공간 | overlay·data FDE·FE 키 봉인/해제 (`fde-kek-lib.sh`, initramfs `init-fde.sh`, `fe-lib.sh`) | 입력/응답 암호화 | 기존 |
 | 사용자 공간 | OTA rootfs 새 키 봉인·재봉인 (`pcr-predict-reseal.sh`) | 입력/응답 암호화 | 기존 |
 | 사용자 공간 | VPN PKCS#11 PIN (`vpn-pkcs11-pin.sh`) | 입력/응답 암호화 | 기존 |
-| 사용자 공간 | VPN PSK/PPK (`tpm-seal-secret.sh`, `tpm-unseal-secret.sh`) | 입력/응답 암호화 | 이번 작업 |
+| 사용자 공간 | VPN PSK/PPK (`tpm-seal-secret.sh`, `tpm-unseal-secret.sh`) | 입력/응답 암호화 | 이번 작업 (비밀은 stdin으로 전달) |
 | PKCS#11 | 토큰/키 프로비저닝 (`pkcs11-functions.inc`) | libtpm2_pkcs11 세션 | 이번 작업 (`tpm2_ptool` 대체) |
 | PKCS#11 | VPN 인증 서명 등 런타임 사용 (libtpm2_pkcs11) | libtpm2_pkcs11 세션 | 기존 |
 

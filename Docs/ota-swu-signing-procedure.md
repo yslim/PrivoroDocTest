@@ -8,7 +8,7 @@
 | 브랜치 | `shiba-meta-secure-boot` `ota-mldsa87-develop` (base: `develop`) |
 | 서명 대상 | .swu 안의 `sw-description` (CMS, 서명 속성 다이제스트 SHA-384) |
 | 지원 알고리즘 | RSA-3072, ML-DSA-87 |
-| 실기 검증 | 2026-10-08, grey 보드 (8장) |
+| 실기 검증 | 2026-10-08, grey 보드 (모드 전환 OTA, 거부, SCLI local-install) |
 
 빌드할 때 두 가지를 정한다.
 
@@ -127,29 +127,7 @@ SWU_VERIFY_MODE = "mldsa87"
 
 `SIGN_KEY_PATH`를 기본값(`~/STM32AP_KeyGen`)이 아닌 곳으로 쓰려면 같은 파일에 `SIGN_KEY_PATH = "/경로"`를 넣는다.
 
-### 4.2 적용 값 확인
-
-```sh
-cd /home/yslim/yocto/tpm-spi
-source layers/openembedded-core/oe-init-build-env build-openstlinuxweston-shiba-ota-grey
-bitbake-getvar --value SWU_VERIFY_MODE -r swu-keygen
-bitbake-getvar --value SWU_SIGN_ALG -r swu-keygen
-bitbake-getvar --value SWU_VERIFY_CERTS -r swu-keygen    # 디바이스에 들어갈 인증서 목록 (RSA 먼저)
-bitbake-getvar --value SWU_SIGN_KEY_DIR -r swu-image-secure
-```
-
-### 4.3 빌드 명령
-
-```sh
-bitbake st-image-secure        # scripts/run bitbake
-bitbake swu-image-secure       # scripts/run gen-swu (cleansstate 후 빌드)
-```
-
-- 신뢰 인증서는 `swu-keygen` 패키지가 rootfs에 넣는다. 이 레시피는 매번 다시 실행(`nostamp`)되므로 키 디렉터리 내용이 바뀌어도 반영된다.
-- `.swu` 서명은 `swu-image-secure`가 한다.
-- 결과물: `tmp-glibc/deploy/images/<MACHINE>/swupdate/swu-image-secure-<MACHINE>-<version>.swu`
-
-### 4.4 결과물 서명 확인
+### 4.2 결과물 서명 확인
 
 .swu 파일 이름에는 서명 알고리즘이 들어가지 않고, 버전이 같으면 같은 이름으로 덮어쓴다. 배포 전에 서명을 확인하고, 보관할 때는 이름에 알고리즘을 붙여 두는 것이 좋다 (예: `...-r160-20261007-rsa3072.swu`).
 
@@ -185,17 +163,16 @@ openssl cms -verify -inform DER -in sw-description.sig -content sw-description -
 | `dual` | RSA, ML-DSA | 모든 모드 (해당 모드가 허용하는 서명) |
 | `mldsa87` | ML-DSA만 | `mldsa87`, `dual`(ML-DSA 서명) |
 
-그래서 `rsa3072` ↔ `mldsa87` 사이는 한 번에 갈 수 없고 **항상 `dual`을 거친다.**
+그래서 `rsa3072`와 `mldsa87` 사이는 한 번에 갈 수 없고 **항상 `dual`을 거친다.**
 
 ### 5.2 RSA-3072 → ML-DSA-87
 
 | 단계 | local.conf | .swu 서명 | 설치 후 디바이스 |
 |---|---|---|---|
 | 1 | `SWU_VERIFY_MODE = "dual"` | RSA (기본값) | dual (RSA + ML-DSA 신뢰) |
-| 2 (선택) | `SWU_VERIFY_MODE = "dual"`, `SWU_SIGN_ALG = "mldsa87"` | ML-DSA | dual. ML-DSA 서명이 통과하는지 미리 확인하는 단계 |
-| 3 | `SWU_VERIFY_MODE = "mldsa87"` | ML-DSA (자동) | mldsa87 (ML-DSA만 신뢰) |
+| 2 | `SWU_VERIFY_MODE = "mldsa87"` | ML-DSA (자동) | mldsa87 (ML-DSA만 신뢰) |
 
-1단계 OTA가 **모든 대상 디바이스에 끝난 뒤** 3단계 .swu를 배포한다. 1단계를 받지 못한 디바이스는 3단계 .swu를 거부한다.
+1단계 OTA가 **모든 대상 디바이스에 끝난 뒤** 2단계 .swu를 배포한다. 1단계를 받지 못한 디바이스는 2단계 .swu를 거부한다.
 
 ### 5.3 ML-DSA-87 → RSA-3072 (되돌리기)
 
@@ -248,20 +225,3 @@ for P in $(pidof swupdate); do tr '\0' '\n' < /proc/$P/environ | grep OPENSSL_CO
 
 - **범위:** OTA 패키지 서명만 바뀐다. 부트체인(TF-A/FIP, FIT 이미지 서명 RSA-2048, ROM ECDSA)과 .swu 내부 페이로드 해시(SHA-256)는 그대로이다.
 - **FIPS 경계:** `dual`·`mldsa87`에서는 swupdate의 암호 연산(RSA 서명 검증 포함)이 default provider를 쓸 수 있어 FIPS 경계 밖이다. `rsa3072`만 기존 FIPS 설정을 유지한다.
-- **이중 서명은 쓰지 않는다:** 한 .swu에 RSA와 ML-DSA 서명을 함께 넣으면, swupdate가 모든 서명자를 검증하므로 ML-DSA를 모르는 디바이스는 거부한다. 신뢰 인증서를 두 개 두는(`dual`) 방식으로 전환한다.
-- **키 교체:** 같은 알고리즘의 키를 바꾸는 경로는 아직 없다. 디렉터리마다 인증서가 하나라서, 키를 바꾸면 기존 디바이스가 새 .swu를 거부한다.
-- **개발 키:** orb의 `~/STM32AP_KeyGen` 키(RSA `CN=shiba SWU Key`, ML-DSA `CN=shiba SWU Key ML-DSA-87`)는 개발용이다. 출하용 키는 서명 전용 머신에서 만들어 `/opt/STM32AP_KeyGen`에 보관하고 빌드 머신에 같은 파일을 배포한다.
-
-## 8. 실기 검증 결과 (2026-10-08, grey, `ota-mldsa87-develop`)
-
-| # | 디바이스 | 빌드 설정 | .swu 서명 | 설치 경로 | 결과 |
-|---|---|---|---|---|---|
-| 1 | mldsa87 | `dual` + `mldsa87` | ML-DSA-87 | HawkBit | 성공 → dual |
-| 2 | dual | `rsa3072` | RSA-3072 | HawkBit | 성공 → rsa3072 |
-| 3 | rsa3072 | `dual` + `rsa3072` | RSA-3072 | HawkBit | 성공 → dual |
-| 4 | dual | `mldsa87` | ML-DSA-87 | HawkBit | 성공 → mldsa87 |
-| 5 | mldsa87 | `rsa3072` | RSA-3072 | HawkBit | 거부 (`Signature verification failed`) |
-| 6 | mldsa87 | `mldsa87` | ML-DSA-87 | SCLI `local-install` | 성공 |
-
-- 모든 성공 건에서 신뢰 인증서·`swupdate.cnf`·데몬 `OPENSSL_CONF`가 해당 모드대로 바뀌었고, rootfs/overlay가 정상으로 열렸다.
-- 거부 시 디바이스는 설치하지 않고 현재 이미지를 유지했다.
